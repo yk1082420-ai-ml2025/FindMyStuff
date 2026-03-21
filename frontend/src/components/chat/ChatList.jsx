@@ -5,7 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { User, Lock } from 'lucide-react';
 
 const ChatList = ({ selectedChat, onSelectChat, refreshTrigger }) => {
-    const { user } = useAuth();
+    useAuth();
     const [chats, setChats] = useState([]);
     const [loading, setLoading] = useState(true);
 

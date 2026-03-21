@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
-import ChatList from '../components/chat/ChatList';
-import ChatWindow from '../components/chat/ChatWindow';
+import ChatList from "../components/Chat/ChatList";
+import ChatWindow from "../components/Chat/ChatWindow";
 
 const ChatPage = () => {
     const { user } = useAuth();
@@ -19,11 +19,12 @@ const ChatPage = () => {
             }
         });
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSocket(newSocket);
 
         // When receiving a new message while not looking at that chat, 
         // we might want to refresh the chat list to bump it up.
-        newSocket.on('receive_message', (message) => {
+        newSocket.on('receive_message', () => {
             // Trigger a refresh of the chat list
             setChatRefreshCounter(prev => prev + 1);
         });

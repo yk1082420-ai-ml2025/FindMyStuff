@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getChat } from '../../api/chat';
-import { sendMessage, markMessagesAsRead } from '../../api/message';
+import { sendMessage } from '../../api/message';
 import { useAuth } from '../../context/AuthContext';
 import { format } from 'date-fns';
 import { ArrowLeft, Send, Image as ImageIcon, Info, Lock } from 'lucide-react';

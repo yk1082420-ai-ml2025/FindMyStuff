@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import API from '../api/axios';
 import {
     User,
@@ -19,6 +19,7 @@ import {
     CheckCircle,
     AlertCircle,
     LogOut,
+    MessageCircle,
 } from 'lucide-react';
 
 const StudentDashboard = () => {
@@ -32,9 +33,13 @@ const StudentDashboard = () => {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState({ text: '', type: '' });
     const [activeTab, setActiveTab] = useState('overview');
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [recentConversations, setRecentConversations] = useState([]);
 
     useEffect(() => {
         fetchProfile();
+        fetchUnreadMessages();
+        fetchRecentConversations();
     }, []);
 
     const fetchProfile = async () => {
@@ -51,6 +56,30 @@ const StudentDashboard = () => {
             setMessage({ text: 'Failed to load profile', type: 'error' });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchUnreadMessages = async () => {
+        try {
+            // Replace with your actual API endpoint for unread messages
+            // const { data } = await API.get('/messages/unread/count');
+            // setUnreadCount(data.count);
+            // For now, using mock data or set to 0
+            setUnreadCount(0);
+        } catch (error) {
+            console.error('Failed to fetch unread messages:', error);
+        }
+    };
+
+    const fetchRecentConversations = async () => {
+        try {
+            // Replace with your actual API endpoint for recent conversations
+            // const { data } = await API.get('/messages/recent');
+            // setRecentConversations(data);
+            // For now, using mock data
+            setRecentConversations([]);
+        } catch (error) {
+            console.error('Failed to fetch recent conversations:', error);
         }
     };
 
@@ -97,6 +126,7 @@ const StudentDashboard = () => {
     const sidebarItems = [
         { id: 'overview', label: 'Overview', icon: <LayoutDashboard className="w-5 h-5" /> },
         { id: 'activity', label: 'Activity', icon: <Activity className="w-5 h-5" /> },
+        { id: 'messages', label: 'Messages', icon: <MessageCircle className="w-5 h-5" /> },
         { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
     ];
 
@@ -135,8 +165,34 @@ const StudentDashboard = () => {
                             >
                                 {item.icon}
                                 {item.label}
+                                {item.id === 'messages' && unreadCount > 0 && (
+                                    <span className="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                                        {unreadCount}
+                                    </span>
+                                )}
                             </button>
                         ))}
+                        
+                        {/* Communication Section with Messages Link */}
+                        <div className="mt-6 pt-6 border-t border-gray-200">
+                            <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                Quick Links
+                            </h3>
+                            <div className="mt-2 space-y-1">
+                                <Link
+                                    to="/chat"
+                                    className="group flex items-center px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:text-gray-900 hover:bg-gray-50"
+                                >
+                                    <MessageCircle className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500" />
+                                    Open Chat
+                                    {unreadCount > 0 && (
+                                        <span className="ml-auto bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-xs">
+                                            {unreadCount}
+                                        </span>
+                                    )}
+                                </Link>
+                            </div>
+                        </div>
                     </nav>
 
                     <button
@@ -163,6 +219,11 @@ const StudentDashboard = () => {
                             >
                                 {item.icon}
                                 {item.label}
+                                {item.id === 'messages' && unreadCount > 0 && (
+                                    <span className="ml-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                                        {unreadCount}
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -419,6 +480,91 @@ const StudentDashboard = () => {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </>
+                    )}
+
+                    {/* Messages Tab */}
+                    {activeTab === 'messages' && (
+                        <>
+                            <div className="mb-8">
+                                <h1 className="text-2xl font-bold text-surface-dark">Messages</h1>
+                                <p className="text-gray-500 text-sm mt-1">Communicate with instructors and other students</p>
+                            </div>
+
+                            <div className="bg-white border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm">
+                                <div className="p-6">
+                                    {recentConversations.length > 0 ? (
+                                        <>
+                                            <div className="mb-6">
+                                                <h3 className="text-lg font-semibold text-surface-dark mb-4">Recent Conversations</h3>
+                                                <div className="space-y-3">
+                                                    {recentConversations.map((conversation, index) => (
+                                                        <Link
+                                                            key={index}
+                                                            to={`/chat?userId=${conversation.userId}`}
+                                                            className="block p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-primary-200 hover:bg-gray-100 transition-all group"
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-medium">
+                                                                        {conversation.name?.charAt(0)?.toUpperCase() || 'U'}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-medium text-surface-dark group-hover:text-primary-600">
+                                                                            {conversation.name || 'Unknown User'}
+                                                                        </p>
+                                                                        <p className="text-sm text-gray-500 line-clamp-1">
+                                                                            {conversation.lastMessage || 'No messages yet'}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                {conversation.unreadCount > 0 && (
+                                                                    <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                                                                        {conversation.unreadCount}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </Link>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="text-center pt-4 border-t border-gray-200">
+                                                <Link
+                                                    to="/chat"
+                                                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl font-medium hover:from-primary-600 hover:to-accent-600 transition-all shadow-md shadow-primary-500/20"
+                                                >
+                                                    <MessageCircle className="w-5 h-5" />
+                                                    View All Messages
+                                                </Link>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center text-center py-12">
+                                            <div className="w-20 h-20 bg-primary-50 rounded-full flex items-center justify-center mb-4">
+                                                <MessageCircle className="w-10 h-10 text-primary-500" />
+                                            </div>
+                                            <h3 className="text-lg font-semibold text-surface-dark mb-2">
+                                                Your Messages
+                                            </h3>
+                                            <p className="text-gray-500 mb-6 max-w-md">
+                                                View and manage all your conversations in one place
+                                            </p>
+                                            <Link
+                                                to="/chat"
+                                                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-accent-500 text-white rounded-xl font-medium hover:from-primary-600 hover:to-accent-600 transition-all shadow-md shadow-primary-500/20"
+                                            >
+                                                <MessageCircle className="w-5 h-5" />
+                                                Go to Messages
+                                            </Link>
+                                            <div className="mt-6 pt-6 border-t border-gray-200 w-full">
+                                                <p className="text-sm text-gray-500">
+                                                    No recent messages. Start a conversation with instructors or fellow students.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </>
                     )}

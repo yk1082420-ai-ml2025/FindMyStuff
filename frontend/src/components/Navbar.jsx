@@ -46,13 +46,7 @@ const Navbar = () => {
                                     <LayoutDashboard className="w-4 h-4" />
                                     Dashboard
                                 </Link>
-                                <Link
-                                    to="/chat"
-                                    className="px-4 py-2 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all flex items-center gap-2"
-                                >
-                                    <MessageCircle className="w-4 h-4" />
-                                    Messages
-                                </Link>
+                               
                                 <div className="flex items-center gap-3 ml-4 pl-4 border-l border-gray-200">
                                     <div className="flex items-center gap-2">
                                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-sm font-semibold text-white">
@@ -117,13 +111,7 @@ const Navbar = () => {
                                 >
                                     Dashboard
                                 </Link>
-                                <Link
-                                    to="/chat"
-                                    onClick={() => setMobileOpen(false)}
-                                    className="block px-4 py-3 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
-                                >
-                                    Messages
-                                </Link>
+                                
                                 <button
                                     onClick={handleLogout}
                                     className="w-full text-left px-4 py-3 text-sm text-danger-500 hover:text-danger-600 rounded-lg hover:bg-gray-100 transition-all"
