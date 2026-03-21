@@ -11,6 +11,8 @@ import StudentDashboard from './pages/StudentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import TestChat from './pages/TestChat';
 import LostItems from './pages/LostItems';
+import FoundItems from './pages/FoundItems';
+import Notices from './pages/Notices';
 
 const AuthRedirect = ({ children }) => {
   const { user } = useAuth();
@@ -58,6 +60,8 @@ function App() {
             <Route path="/chat" element={<ProtectedRoute><TestChat /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
             <Route path="/lost" element={<LostItems />} />
+            <Route path="/found-items" element={<FoundItems />} />
+            <Route path="/notices" element={<Notices />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </SocketInitializer>
