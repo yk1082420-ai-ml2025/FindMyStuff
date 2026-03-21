@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const lostItemSchema = new mongoose.Schema(
+const foundItemSchema = new mongoose.Schema(
     {
         title: {
             type: String,
@@ -18,14 +18,14 @@ const lostItemSchema = new mongoose.Schema(
             enum: ['Electronics', 'Documents', 'Clothing', 'Accessories', 'Books', 'Keys', 'Bags', 'Sports', 'Other'],
             default: 'Other',
         },
-        lastSeenLocation: {
+        foundLocation: {
             type: String,
-            required: [true, 'Last seen location is required'],
+            required: [true, 'Found location is required'],
             trim: true,
         },
-        dateLost: {
+        dateFound: {
             type: Date,
-            required: [true, 'Date lost is required'],
+            required: [true, 'Date found is required'],
         },
         color: {
             type: String,
@@ -45,16 +45,16 @@ const lostItemSchema = new mongoose.Schema(
         status: {
             type: String,
             enum: ['Lost', 'Found', 'Claimed', 'Returned', 'Archived'],
-            default: 'Lost',
+            default: 'Found',
         },
         postedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
             required: true,
         },
-        linkedFoundPost: {
+        linkedLostPost: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'FoundItem', // can be linked to a found post later
+            ref: 'LostItem', // can be linked to a lost post later
             default: null,
         },
         isArchived: {
@@ -72,7 +72,7 @@ const lostItemSchema = new mongoose.Schema(
 );
 
 // Index for search
-lostItemSchema.index({ title: 'text', description: 'text', lastSeenLocation: 'text' });
-lostItemSchema.index({ category: 1, status: 1, isArchived: 1 });
+foundItemSchema.index({ title: 'text', description: 'text', foundLocation: 'text' });
+foundItemSchema.index({ category: 1, status: 1, isArchived: 1 });
 
-module.exports = mongoose.model('LostItem', lostItemSchema);
+module.exports = mongoose.model('FoundItem', foundItemSchema);
