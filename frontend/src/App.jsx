@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import StudentDashboard from './pages/StudentDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import LostItems from './pages/LostItems';
 
 const AuthRedirect = ({ children }) => {
   const { user } = useAuth();
@@ -55,6 +56,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/lost" element={<LostItems />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
