@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Menu, X, Search, LogOut, User, LayoutDashboard } from 'lucide-react';
+import { Menu, X, Search, LogOut, User, LayoutDashboard, MessageCircle } from 'lucide-react';
 
 const Navbar = () => {
     const { user, logout } = useAuth();
@@ -45,6 +45,13 @@ const Navbar = () => {
                                 >
                                     <LayoutDashboard className="w-4 h-4" />
                                     Dashboard
+                                </Link>
+                                <Link
+                                    to="/chat"
+                                    className="px-4 py-2 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all flex items-center gap-2"
+                                >
+                                    <MessageCircle className="w-4 h-4" />
+                                    Messages
                                 </Link>
                                 <div className="flex items-center gap-3 ml-4 pl-4 border-l border-gray-200">
                                     <div className="flex items-center gap-2">
@@ -109,6 +116,13 @@ const Navbar = () => {
                                     className="block px-4 py-3 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
                                 >
                                     Dashboard
+                                </Link>
+                                <Link
+                                    to="/chat"
+                                    onClick={() => setMobileOpen(false)}
+                                    className="block px-4 py-3 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
+                                >
+                                    Messages
                                 </Link>
                                 <button
                                     onClick={handleLogout}

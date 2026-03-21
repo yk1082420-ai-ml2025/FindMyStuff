@@ -3,6 +3,7 @@ import API from '../api/axios';
 
 const AuthContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
@@ -12,6 +13,7 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const stored = localStorage.getItem('user');
         if (stored) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setUser(JSON.parse(stored));
         }
         setLoading(false);

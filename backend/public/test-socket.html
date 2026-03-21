@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Back2U Socket Test - FIXED</title>
+<script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+<style>
+body {
+    font-family: Arial;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    padding: 20px;
+    margin: 0;
+}
+
+.container {
+    max-width: 600px;
+    margin: auto;
+    background: white;
+    color: black;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+h2 { margin-top: 0; color: #667eea; }
+h3 { font-size: 14px; margin: 10px 0; color: #666; }
+
+input, textarea {
+    width: 100%;
+    padding: 10px;
+    margin: 8px 0;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+}
+
+button {
+    padding: 10px 15px;
+    border: none;
+    border-radius: 6px;
+    background: #667eea;
+    color: white;
+    cursor: pointer;
+    margin-right: 5px;
+    margin-top: 5px;
+}
+
+button:hover { background: #5a67d8; }
+
+#messages {
+    border: 1px solid #ccc;
+    height: 300px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f9f9f9;
+    margin: 10px 0;
+    border-radius: 8px;
+}
+
+.message {
+    padding: 8px;
+    margin: 5px 0;
+    border-radius: 8px;
+    word-wrap: break-word;
+}
+
+.own {
+    background: #667eea;
+    color: white;
+    text-align: right;
+}
+
+.other {
+    background: #e9ecef;
+    color: #333;
+    text-align: left;
+}
+
+.system {
+    background: #fff3cd;
+    color: #856404;
+    text-align: center;
+    font-size: 12px;
+}
+
+#logs {
+    border: 1px solid #ccc;
+    height: 150px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f8f9fa;
+    font-size: 12px;
+    font-family: monospace;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.log-success { color: #28a745; }
+.log-error { color: #dc3545; }
+.log-info { color: #17a2b8; }
+.log-warning { color: #ffc107; }
+
+.status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    margin-left: 10px;
+}
+
+.status-online { background: #28a745; color: white; }
+.status-offline { background: #dc3545; color: white; }
+
+hr { margin: 15px 0; }
+
+.debug-info {
+    background: #f0f0f0;
+    padding: 8px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-family: monospace;
+    margin: 5px 0;
+    word-break: break-all;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>💬 Back2U Real-time Chat</h2>
+    
+    <div id="userStatus" style="margin-bottom: 10px;">
+        <span id="statusBadge" class="status status-offline">Offline</span>
+        <span id="userName" style="margin-left: 10px;">Not connected</span>
+    </div>
+
+    <h3>🔌 Connection</h3>
+    <input id="serverUrl" value="http://localhost:5000" placeholder="Server URL">
+    <input id="token" placeholder="Paste your JWT token here">
+    <button onclick="connectSocket()">🔌 Connect</button>
+    <button onclick="disconnectSocket()">❌ Disconnect</button>
+
+    <hr>
+
+    <h3>💬 Chat</h3>
+    <input id="chatId" placeholder="Enter Chat ID (copy from other user)">
+    <button onclick="joinChat()">📢 Join Chat</button>
+    <button onclick="createNewChat()">➕ Create New Chat</button>
+    <input id="otherUserId" placeholder="Other User ID (for new chat)" style="margin-top: 5px;">
+    
+    <div id="currentChatInfo" style="font-size: 12px; color: #666; margin: 5px 0;"></div>
+    
+    <div id="messages">
+        <div style="text-align: center; color: #999;">No messages yet</div>
+    </div>
+    
+    <textarea id="message" rows="2" placeholder="Type your message..." disabled></textarea>
+    <button onclick="sendMessage()" id="sendBtn" disabled>📤 Send</button>
+    
+    <div id="typingIndicator" style="font-size: 11px; color: #999; font-style: italic; min-height: 20px;"></div>
+
+    <hr>
+
+    <h3>📊 Activity Log</h3>
+    <div id="logs"></div>
+</div>
+
+<script>
+let socket = null;
+let currentUserId = null;
+let currentUserName = null;
+let currentChatId = null;
+
+function addLog(message, type = 'info') {
+    const logsDiv = document.getElementById("logs");
+    const time = new Date().toLocaleTimeString();
+    const entry = document.createElement("div");
+    entry.className = `log-${type}`;
+    entry.innerHTML = `[${time}] ${message}`;
+    logsDiv.appendChild(entry);
+    logsDiv.scrollTop = logsDiv.scrollHeight;
+    
+    // Keep last 100 logs
+    while (logsDiv.children.length > 100) {
+        logsDiv.removeChild(logsDiv.firstChild);
+    }
+}
+
+function displayMessage(msg, isOwn) {
+    const messagesDiv = document.getElementById("messages");
+    
+    // Remove placeholder
+    if (messagesDiv.children.length === 1 && messagesDiv.children[0].innerText.includes('No messages')) {
+        messagesDiv.innerHTML = '';
+    }
+    
+    const messageDiv = document.createElement("div");
+    messageDiv.className = `message ${msg.type === 'SYSTEM' ? 'system' : (isOwn ? 'own' : 'other')}`;
+    
+    const time = new Date(msg.createdAt).toLocaleTimeString();
+    const senderName = msg.senderId?.name || (isOwn ? 'You' : 'Other');
+    
+    messageDiv.innerHTML = `
+        <div><strong>${senderName}</strong> <span style="font-size: 10px;">${time}</span></div>
+        <div>${escapeHtml(msg.content)}</div>
+        ${msg.isEdited ? '<div style="font-size: 9px; opacity: 0.7;">(edited)</div>' : ''}
+    `;
+    
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function connectSocket() {
+    const token = document.getElementById("token").value.trim();
+    const url = document.getElementById("serverUrl").value.trim();
+
+    if (!token) {
+        addLog("❌ Please enter your JWT token", "error");
+        return;
+    }
+
+    try {
+        addLog("🔍 Verifying token...", "info");
+        
+        const response = await fetch(url + "/api/auth/me", {
+            headers: { Authorization: "Bearer " + token }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        // 🔧 FIX: Handle different response structures
+        let user = null;
+        
+        if (data.data && data.data._id) {
+            user = data.data;
+            addLog(`📦 Response format: data.data`, "info");
+        } else if (data.user && data.user._id) {
+            user = data.user;
+            addLog(`📦 Response format: data.user`, "info");
+        } else if (data._id) {
+            user = data;
+            addLog(`📦 Response format: data directly`, "info");
+        } else {
+            addLog(`⚠️ Unknown response format: ${JSON.stringify(data)}`, "warning");
+            throw new Error("Could not find user data in response");
+        }
+        
+        currentUserId = user._id;
+        currentUserName = user.name || user.fullName || "User";
+
+        // Update UI
+        document.getElementById("statusBadge").className = "status status-online";
+        document.getElementById("statusBadge").innerHTML = "Online";
+        document.getElementById("userName").innerHTML = `👤 ${currentUserName}`;
+        
+        addLog(`✅ Connected as: ${currentUserName} (ID: ${currentUserId.substring(0, 8)}...)`, "success");
+        addLog(`📡 User ID: ${currentUserId}`, "info");
+
+        // Connect Socket.io
+        socket = io(url, { auth: { token } });
+
+        socket.on("connect", () => {
+            addLog("✅ Socket.io connected", "success");
+        });
+
+        socket.on("connect_error", (err) => {
+            addLog(`❌ Socket error: ${err.message}`, "error");
+        });
+
+        socket.on("new_message", (msg) => {
+            addLog(`📨 New message: ${msg.content.substring(0, 50)}...`, "info");
+            
+            // Only show if it's for current chat
+            if (currentChatId === msg.chatId) {
+                displayMessage(msg, msg.senderId._id === currentUserId);
+            } else {
+                addLog(`⚠️ Message for different chat (${msg.chatId})`, "warning");
+            }
+        });
+
+        socket.on("user_typing", (data) => {
+            if (currentChatId && data.userId !== currentUserId) {
+                const typingDiv = document.getElementById("typingIndicator");
+                typingDiv.innerHTML = data.isTyping ? "✏️ Other user is typing..." : "";
+            }
+        });
+
+    } catch (err) {
+        addLog(`❌ ${err.message}`, "error");
+        console.error("Full error:", err);
+    }
+}
+
+function disconnectSocket() {
+    if (socket) {
+        socket.disconnect();
+        socket = null;
+    }
+    currentUserId = null;
+    currentUserName = null;
+    currentChatId = null;
+    
+    document.getElementById("statusBadge").className = "status status-offline";
+    document.getElementById("statusBadge").innerHTML = "Offline";
+    document.getElementById("userName").innerHTML = "Not connected";
+    document.getElementById("message").disabled = true;
+    document.getElementById("sendBtn").disabled = true;
+    document.getElementById("currentChatInfo").innerHTML = "";
+    
+    addLog("🔌 Disconnected", "warning");
+}
+
+async function createNewChat() {
+    const otherUserId = document.getElementById("otherUserId").value.trim();
+    const token = document.getElementById("token").value.trim();
+    const url = document.getElementById("serverUrl").value.trim();
+    
+    if (!otherUserId) {
+        addLog("❌ Please enter Other User ID", "error");
+        return;
+    }
+    
+    if (!socket) {
+        addLog("❌ Not connected. Please connect first.", "error");
+        return;
+    }
+    
+    addLog(`🔨 Creating chat with user: ${otherUserId}`, "info");
+    
+    try {
+        const response = await fetch(`${url}/api/chats`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                claimId: 'chat_' + Date.now(),
+                itemId: 'item_' + Date.now(),
+                itemType: 'lost',
+                otherUserId: otherUserId
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const chatId = data.data._id;
+            document.getElementById("chatId").value = chatId;
+            addLog(`✅ Chat created! ID: ${chatId}`, "success");
+            addLog(`📝 Copy this Chat ID and share with other user`, "info");
+            joinChat();
+        } else {
+            addLog(`❌ Failed to create chat: ${data.message}`, "error");
+        }
+    } catch (err) {
+        addLog(`❌ Error: ${err.message}`, "error");
+    }
+}
+
+function joinChat() {
+    const chatId = document.getElementById("chatId").value.trim();
+    
+    if (!chatId) {
+        addLog("❌ Please enter a Chat ID", "error");
+        return;
+    }
+    
+    if (!socket) {
+        addLog("❌ Not connected. Please connect first.", "error");
+        return;
+    }
+    
+    currentChatId = chatId;
+    
+    // Enable message input
+    document.getElementById("message").disabled = false;
+    document.getElementById("sendBtn").disabled = false;
+    document.getElementById("currentChatInfo").innerHTML = `Current chat: ${chatId}`;
+    
+    addLog(`📢 Joined chat: ${chatId}`, "success");
+    
+    // Load existing messages
+    loadMessages(chatId);
+}
+
+async function loadMessages(chatId) {
+    const token = document.getElementById("token").value;
+    const url = document.getElementById("serverUrl").value;
+    
+    try {
+        addLog("📚 Loading messages...", "info");
+        
+        const response = await fetch(`${url}/api/chats/${chatId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const messagesDiv = document.getElementById("messages");
+            messagesDiv.innerHTML = '';
+            
+            if (data.data.messages.length === 0) {
+                messagesDiv.innerHTML = '<div style="text-align: center; color: #999;">✨ No messages yet. Send the first message!</div>';
+            } else {
+                data.data.messages.forEach(msg => {
+                    const isOwn = msg.senderId._id === currentUserId;
+                    displayMessage(msg, isOwn);
+                });
+            }
+            
+            addLog(`✅ Loaded ${data.data.messages.length} messages`, "success");
+        } else {
+            addLog(`❌ Failed to load messages: ${data.message}`, "error");
+        }
+    } catch (err) {
+        addLog(`❌ Error loading messages: ${err.message}`, "error");
+    }
+}
+
+function sendMessage() {
+    if (!socket) {
+        addLog("❌ Not connected to server", "error");
+        return;
+    }
+    
+    if (!currentChatId) {
+        addLog("❌ Not in a chat. Please join a chat first.", "error");
+        return;
+    }
+    
+    const content = document.getElementById("message").value.trim();
+    if (!content) {
+        addLog("❌ Please enter a message", "error");
+        return;
+    }
+    
+    socket.emit("send_message", {
+        chatId: currentChatId,
+        content: content
+    });
+    
+    addLog(`📤 Sent: ${content.substring(0, 50)}`, "info");
+    document.getElementById("message").value = "";
+}
+
+// Typing indicator
+let typingTimeout;
+document.getElementById("message").addEventListener("input", () => {
+    if (socket && currentChatId) {
+        socket.emit("typing", {
+            chatId: currentChatId,
+            isTyping: true
+        });
+        
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            if (socket && currentChatId) {
+                socket.emit("typing", {
+                    chatId: currentChatId,
+                    isTyping: false
+                });
+            }
+        }, 1000);
+    }
+});
+</script>
+</body>
+</html>

@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 const StudentDashboard = () => {
-    const { user, updateUser, logout } = useAuth();
+    const { updateUser, logout } = useAuth();
     const navigate = useNavigate();
     const [profile, setProfile] = useState(null);
     const [editing, setEditing] = useState(false);
@@ -46,6 +46,7 @@ const StudentDashboard = () => {
                 email: data.email,
                 password: '',
             });
+        // eslint-disable-next-line no-unused-vars
         } catch (error) {
             setMessage({ text: 'Failed to load profile', type: 'error' });
         } finally {
@@ -82,6 +83,7 @@ const StudentDashboard = () => {
             await API.delete('/users/profile');
             logout();
             navigate('/');
+        // eslint-disable-next-line no-unused-vars
         } catch (error) {
             setMessage({ text: 'Failed to delete account', type: 'error' });
         }
