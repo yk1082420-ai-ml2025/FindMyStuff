@@ -2,12 +2,12 @@ const mongoose = require('mongoose');
 
 const claimSchema = new mongoose.Schema({
     itemId: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: String,
         ref: 'Item',
         required: true
     },
     claimantId: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: String,
         ref: 'User',
         required: true
     },

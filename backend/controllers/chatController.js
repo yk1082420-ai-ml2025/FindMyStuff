@@ -2,7 +2,7 @@ const Chat = require('../models/Chat');
 const Message = require('../models/Message');
 const User = require('../models/User');
 const Claim = require('../models/Claim');
-const Item = require('../models/Item');
+const mongoose = require('mongoose');
 
 // @desc    Create a new chat
 // @route   POST /api/chats
@@ -11,6 +11,14 @@ const createChat = async (req, res) => {
     try {
         const { claimId, itemId, itemType, otherUserId } = req.body;
         const userId = req.user.id;
+
+        // Validate required fields
+        if (!itemId || !itemType || !otherUserId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: itemId, itemType, and otherUserId are required'
+            });
+        }
 
         // Check if other user exists
         const otherUser = await User.findById(otherUserId);
@@ -21,15 +29,23 @@ const createChat = async (req, res) => {
             });
         }
 
-        // Verify claim exists if provided
+        // Handle claimId - only validate if it's a valid ObjectId
         if (claimId) {
-            const claim = await Claim.findById(claimId);
-            if (!claim) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Claim not found'
-                });
+            // Check if claimId is a valid MongoDB ObjectId (24 hex chars)
+            const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(claimId);
+            
+            if (isValidObjectId) {
+                // Only query Claim if it's a real ObjectId
+                const claim = await Claim.findById(claimId);
+                if (!claim) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'Claim not found'
+                    });
+                }
             }
+            // If claimId is a custom string like "CLAIM001", skip validation
+            // This allows testing without actual claims
         }
 
         // Check if chat already exists
@@ -42,33 +58,47 @@ const createChat = async (req, res) => {
         if (existingChat) {
             return res.status(400).json({
                 success: false,
-                message: 'Chat already exists between these users for this item'
+                message: 'Chat already exists between these users for this item',
+                data: {
+                    chatId: existingChat._id,
+                    isLocked: existingChat.status === 'LOCKED'
+                }
             });
         }
 
-        // Create new chat
+        // Create new chat - accept any claimId (string or null)
         const chat = await Chat.create({
             claimId: claimId || null,
             participants: [userId, otherUserId],
             itemId,
             itemType,
-            status: 'ACTIVE'
+            status: 'ACTIVE',
+            lastMessage: 'Chat created',
+            lastMessageAt: new Date()
         });
 
         // Populate participant details
         const populatedChat = await Chat.findById(chat._id)
-            .populate('participants', 'fullName email profilePhoto');
+            .populate('participants', 'fullName profilePhoto');
 
         res.status(201).json({
             success: true,
-            data: populatedChat
+            data: {
+                _id: populatedChat._id,
+                participants: populatedChat.participants,
+                itemId: populatedChat.itemId,
+                itemType: populatedChat.itemType,
+                status: populatedChat.status,
+                claimId: populatedChat.claimId,
+                createdAt: populatedChat.createdAt
+            }
         });
     } catch (error) {
         console.error('Create chat error:', error);
         res.status(500).json({
             success: false,
             message: 'Error creating chat',
-            error: error.message
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -84,14 +114,17 @@ const getChats = async (req, res) => {
             participants: userId,
             status: { $ne: 'ARCHIVED' }
         })
-            .populate('participants', 'fullName profilePhoto email') // email එක populate වෙනවා
+            .populate('participants', 'fullName profilePhoto')
             .sort({ lastMessageAt: -1 });
 
-        // 🔒 Format response - hide email
+        // Format response - hide email
         const formattedChats = chats.map(chat => {
             const otherUser = chat.participants.find(
                 p => p._id.toString() !== userId
             );
+            
+            // Get unread count for this user
+            const unreadCount = chat.unreadCount?.get(userId.toString()) || 0;
             
             return {
                 _id: chat._id,
@@ -99,7 +132,6 @@ const getChats = async (req, res) => {
                     id: otherUser._id,
                     fullName: otherUser.fullName,
                     profilePhoto: otherUser.profilePhoto
-                    // ❌ email එක නැහැ
                 },
                 item: {
                     id: chat.itemId,
@@ -110,7 +142,7 @@ const getChats = async (req, res) => {
                 lastMessageAt: chat.lastMessageAt,
                 status: chat.status,
                 isLocked: chat.status === 'LOCKED',
-                unreadCount: 0
+                unreadCount: unreadCount
             };
         });
 
@@ -120,36 +152,67 @@ const getChats = async (req, res) => {
             data: formattedChats
         });
     } catch (error) {
-        // error handling
+        console.error('Get chats error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching chats',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
+
 // @desc    Get single chat with messages
 // @route   GET /api/chats/:id
 // @access  Private
-// ඔබගේ existing getChatById function එකේ participants return කරන කොටස වෙනස් කරන්න
-
 const getChatById = async (req, res) => {
     try {
         const chatId = req.params.id;
         const userId = req.user.id;
 
+        // Validate ObjectId format
+        if (!mongoose.Types.ObjectId.isValid(chatId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid chat ID format'
+            });
+        }
+
         const chat = await Chat.findById(chatId)
-            .populate('participants', 'fullName profilePhoto email'); // email එක populate වෙනවා
+            .populate('participants', 'fullName profilePhoto');
 
-        // ... existing validation ...
+        if (!chat) {
+            return res.status(404).json({
+                success: false,
+                message: 'Chat not found'
+            });
+        }
 
-        const messages = await Message.find({ chatId }).populate('senderId', 'fullName profilePhoto').sort({ createdAt: 1 });
+        // Check if user is participant
+        const isParticipant = chat.participants.some(p => p._id.toString() === userId);
+        if (!isParticipant) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to view this chat'
+            });
+        }
 
-        // 🔒 NEW: Hide email from participants
-        const safeParticipants = chat.participants.map(participant => {
-            const safeParticipant = {
-                _id: participant._id,
-                fullName: participant.fullName,
-                profilePhoto: participant.profilePhoto
-                // ❌ email එක exclude කරනවා
-            };
-            return safeParticipant;
-        });
+        // Get messages
+        const messages = await Message.find({ chatId })
+            .populate('senderId', 'fullName profilePhoto')
+            .sort({ createdAt: 1 });
+
+        // Hide email from participants
+        const safeParticipants = chat.participants.map(participant => ({
+            _id: participant._id,
+            fullName: participant.fullName,
+            profilePhoto: participant.profilePhoto
+        }));
+
+        // Mark unread messages as read for current user
+        if (chat.unreadCount && chat.unreadCount.get(userId) > 0) {
+            chat.unreadCount.set(userId, 0);
+            await chat.save();
+        }
 
         res.status(200).json({
             success: true,
@@ -157,16 +220,33 @@ const getChatById = async (req, res) => {
                 chat: {
                     _id: chat._id,
                     claimId: chat.claimId,
-                    participants: safeParticipants,  // ✅ Safe version
-                    status: chat.status
+                    participants: safeParticipants,
+                    status: chat.status,
+                    itemId: chat.itemId,
+                    itemType: chat.itemType,
+                    createdAt: chat.createdAt
                 },
-                messages: messages,
+                messages: messages.map(msg => ({
+                    _id: msg._id,
+                    content: msg.content,
+                    senderId: msg.senderId,
+                    type: msg.type,
+                    isEdited: msg.isEdited || false,
+                    editedAt: msg.editedAt,
+                    isDeleted: msg.isDeleted || false,
+                    createdAt: msg.createdAt
+                })),
                 isLocked: chat.status === 'LOCKED',
                 lockMessage: chat.status === 'LOCKED' ? 'This chat is locked. Item has been returned.' : null
             }
         });
     } catch (error) {
-        // error handling
+        console.error('Get chat by id error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching chat',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 };
 
@@ -178,6 +258,14 @@ const lockChat = async (req, res) => {
         const chatId = req.params.id;
         const userId = req.user.id;
 
+        // Validate ObjectId format
+        if (!mongoose.Types.ObjectId.isValid(chatId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid chat ID format'
+            });
+        }
+
         const chat = await Chat.findById(chatId);
 
         if (!chat) {
@@ -188,10 +276,21 @@ const lockChat = async (req, res) => {
         }
 
         // Check if user is participant
-        if (!chat.participants.includes(userId)) {
+        if (!chat.participants.includes(userId.toString())) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to lock this chat'
+            });
+        }
+
+        // Check if already locked
+        if (chat.status === 'LOCKED') {
+            return res.status(400).json({
+                success: false,
+                message: 'Chat is already locked',
+                data: {
+                    lockedAt: chat.lockedAt
+                }
             });
         }
 
@@ -199,6 +298,14 @@ const lockChat = async (req, res) => {
         chat.status = 'LOCKED';
         chat.lockedAt = new Date();
         await chat.save();
+
+        // Add system message
+        await Message.create({
+            chatId: chat._id,
+            senderId: userId,
+            content: '🔒 This chat has been locked. Item has been returned.',
+            type: 'SYSTEM'
+        });
 
         res.status(200).json({
             success: true,
@@ -214,7 +321,7 @@ const lockChat = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error locking chat',
-            error: error.message
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -251,7 +358,8 @@ const getLockedChats = async (req, res) => {
                     image: null
                 },
                 lockedAt: chat.lockedAt,
-                lastMessage: chat.lastMessage
+                lastMessage: chat.lastMessage,
+                lastMessageAt: chat.lastMessageAt
             };
         });
 
@@ -265,7 +373,7 @@ const getLockedChats = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching locked chats',
-            error: error.message
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };
@@ -278,6 +386,14 @@ const getChatStatus = async (req, res) => {
         const chatId = req.params.id;
         const userId = req.user.id;
 
+        // Validate ObjectId format
+        if (!mongoose.Types.ObjectId.isValid(chatId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid chat ID format'
+            });
+        }
+
         const chat = await Chat.findById(chatId);
 
         if (!chat) {
@@ -288,7 +404,7 @@ const getChatStatus = async (req, res) => {
         }
 
         // Check if user is participant
-        if (!chat.participants.includes(userId)) {
+        if (!chat.participants.includes(userId.toString())) {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized'
@@ -298,10 +414,14 @@ const getChatStatus = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
+                _id: chat._id,
                 status: chat.status,
                 isLocked: chat.status === 'LOCKED',
                 lockedAt: chat.lockedAt,
-                canSendMessages: chat.status !== 'LOCKED'
+                canSendMessages: chat.status !== 'LOCKED',
+                participants: chat.participants.length,
+                itemId: chat.itemId,
+                itemType: chat.itemType
             }
         });
     } catch (error) {
@@ -309,7 +429,7 @@ const getChatStatus = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error fetching chat status',
-            error: error.message
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

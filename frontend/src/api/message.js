@@ -1,16 +1,25 @@
 import API from './axios';
 
-// Get messages for a specific chat 
-// (If GET /chats/:id already returns messages, we might not need a separate GET /messages/:chatId endpoint, 
-// but the plan says GET /chats/:id gets chat with messages. We'll use getChat from chat.js for that, or if there's paginated GET /messages)
-// Assuming we send message using POST /messages
-export const sendMessage = async (messageData) => {
-  const { data } = await API.post('/messages', messageData);
-  return data.data || data;
+// Send a message
+export const sendMessage = async (data) => {
+    const response = await API.post('/messages', data);
+    return response.data.data;
 };
 
-// Mark messages in a chat as read
-export const markMessagesAsRead = async (chatId) => {
-  const { data } = await API.put(`/messages/mark-read/${chatId}`);
-  return data.data || data;
+// Get messages for a chat
+export const getMessages = async (chatId) => {
+    const response = await API.get(`/messages/${chatId}`);
+    return response.data.data;
+};
+
+// Edit a message
+export const editMessage = async (messageId, content) => {
+    const response = await API.put(`/messages/${messageId}/edit`, { content });
+    return response.data;
+};
+
+// Delete a message
+export const deleteMessage = async (messageId) => {
+    const response = await API.delete(`/messages/${messageId}/delete`);
+    return response.data;
 };

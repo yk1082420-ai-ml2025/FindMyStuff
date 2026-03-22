@@ -30,11 +30,7 @@ const sendMessage = async (req, res) => {
         if (chat.status === 'LOCKED') {
             return res.status(403).json({
                 success: false,
-                message: 'This chat is locked. Cannot send messages. The item has been returned.',
-                data: {
-                    isLocked: true,
-                    lockedAt: chat.lockedAt
-                }
+                message: 'This chat is locked. Cannot send messages.'
             });
         }
 
@@ -55,6 +51,12 @@ const sendMessage = async (req, res) => {
         // Populate sender details
         const populatedMessage = await Message.findById(message._id)
             .populate('senderId', 'fullName profilePhoto');
+
+        // Emit socket event if available
+        const io = req.app.get('io');
+        if (io) {
+            io.to(chatId).emit('message_received', populatedMessage);
+        }
 
         res.status(201).json({
             success: true,
@@ -114,102 +116,6 @@ const getMessages = async (req, res) => {
     }
 };
 
-// Add to messageController.js
-const editMessage = async (req, res) => {
-    const { messageId } = req.params;
-    const { content } = req.body;
-    const userId = req.user.id;
-    
-    const message = await Message.findById(messageId);
-    
-    // Allow edit only within 5 minutes
-    const timeElapsed = Date.now() - new Date(message.createdAt).getTime();
-    const FIVE_MINUTES = 5 * 60 * 1000;
-    
-    if (timeElapsed > FIVE_MINUTES) {
-        return res.status(403).json({
-            success: false,
-            message: 'Messages can only be edited within 5 minutes'
-        });
-    }
-    
-    message.content = content;
-    message.isEdited = true;
-    message.editedAt = new Date();
-    await message.save();
-    
-    res.json({ success: true, data: message });
-};
-
-const deleteMessage = async (req, res) => {
-    const { messageId } = req.params;
-    const userId = req.user.id;
-    
-    const message = await Message.findById(messageId);
-    
-    if (message.senderId.toString() !== userId) {
-        return res.status(403).json({
-            success: false,
-            message: 'Can only delete your own messages'
-        });
-    }
-    
-    message.deleted = true;
-    message.content = '[Message deleted]';
-    await message.save();
-    
-    res.json({ success: true, message: 'Message deleted' });
-};
-// @desc    Get edit history of a message (optional)
-// @route   GET /api/messages/:id/history
-// @access  Private
-const getMessageHistory = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.id;
-
-        const message = await Message.findById(id);
-        if (!message) {
-            return res.status(404).json({
-                success: false,
-                message: 'Message not found'
-            });
-        }
-
-        // Check if user is participant in the chat
-        const chat = await Chat.findById(message.chatId);
-        if (!chat.participants.includes(userId)) {
-            return res.status(403).json({
-                success: false,
-                message: 'Not authorized to view message history'
-            });
-        }
-
-        // If you want to store edit history, you'd need a separate collection
-        // For now, just return edit status
-        res.status(200).json({
-            success: true,
-            data: {
-                isEdited: message.isEdited,
-                editedAt: message.editedAt,
-                originalContent: message.isDeleted ? null : message.content,
-                isDeleted: message.isDeleted || false,
-                deletedAt: message.deletedAt
-            }
-        });
-
-    } catch (error) {
-        console.error('Get message history error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching message history',
-            error: error.message
-        });
-    }
-};
-
-
-
 // @desc    Mark message as read
 // @route   PUT /api/messages/:id/read
 // @access  Private
@@ -247,12 +153,179 @@ const markAsRead = async (req, res) => {
     }
 };
 
-// Update module.exports
+// @desc    Edit a message (time-limited to 5 minutes)
+// @route   PUT /api/messages/:id/edit
+// @access  Private
+const editMessage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { content } = req.body;
+        const userId = req.user.id;
+
+        if (!content || content.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                message: 'Message content cannot be empty'
+            });
+        }
+
+        const message = await Message.findById(id);
+        if (!message) {
+            return res.status(404).json({
+                success: false,
+                message: 'Message not found'
+            });
+        }
+
+        if (message.senderId.toString() !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only edit your own messages'
+            });
+        }
+
+        if (message.type === 'SYSTEM') {
+            return res.status(403).json({
+                success: false,
+                message: 'System messages cannot be edited'
+            });
+        }
+
+        const timeElapsed = Date.now() - new Date(message.createdAt).getTime();
+        const FIVE_MINUTES = 60 * 60 * 1000;
+        
+        if (timeElapsed > FIVE_MINUTES) {
+            return res.status(403).json({
+                success: false,
+                message: 'Messages can only be edited within 60 minutes of sending'
+            });
+        }
+
+        message.content = content;
+        message.isEdited = true;
+        message.editedAt = new Date();
+        await message.save();
+
+        const updatedMessage = await Message.findById(message._id)
+            .populate('senderId', 'fullName profilePhoto');
+
+        res.status(200).json({
+            success: true,
+            data: updatedMessage,
+            message: 'Message edited successfully'
+        });
+    } catch (error) {
+        console.error('Edit message error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error editing message',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Delete a message (soft delete)
+// @route   DELETE /api/messages/:id/delete
+// @access  Private
+const deleteMessage = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        const message = await Message.findById(id);
+        if (!message) {
+            return res.status(404).json({
+                success: false,
+                message: 'Message not found'
+            });
+        }
+
+        if (message.senderId.toString() !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only delete your own messages'
+            });
+        }
+
+        if (message.type === 'SYSTEM') {
+            return res.status(403).json({
+                success: false,
+                message: 'System messages cannot be deleted'
+            });
+        }
+
+        message.isDeleted = true;
+        message.deletedAt = new Date();
+        message.deletedBy = userId;
+        message.content = '[Message deleted by user]';
+        await message.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Message deleted successfully',
+            data: {
+                messageId: id,
+                deletedAt: message.deletedAt
+            }
+        });
+    } catch (error) {
+        console.error('Delete message error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error deleting message',
+            error: error.message
+        });
+    }
+};
+
+// @desc    Get message history
+// @route   GET /api/messages/:id/history
+// @access  Private
+const getMessageHistory = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        const message = await Message.findById(id);
+        if (!message) {
+            return res.status(404).json({
+                success: false,
+                message: 'Message not found'
+            });
+        }
+
+        const chat = await Chat.findById(message.chatId);
+        if (!chat || !chat.participants.includes(userId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to view message history'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                isEdited: message.isEdited,
+                editedAt: message.editedAt,
+                isDeleted: message.isDeleted || false,
+                deletedAt: message.deletedAt
+            }
+        });
+    } catch (error) {
+        console.error('Get message history error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching message history',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     sendMessage,
     getMessages,
     markAsRead,
-    editMessage,      
-    deleteMessage,    
-    getMessageHistory 
+    editMessage,
+    deleteMessage,
+    getMessageHistory
 };

@@ -1,7 +1,7 @@
-const Claim = require('../Models/Claim');
-const Item = require('../Models/Item');
-const Chat = require('../Models/Chat');
-const Message = require('../Models/Message');
+const Claim = require('../models/Claim');
+const Item = require('../models/Item');
+const Chat = require('../models/Chat');
+const Message = require('../models/Message');
 
 // @desc    Create a new Claim
 // @route   POST /api/claims/:itemId

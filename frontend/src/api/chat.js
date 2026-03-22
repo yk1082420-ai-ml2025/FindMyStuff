@@ -18,3 +18,21 @@ export const getChat = async (chatId) => {
   const { data } = await API.get(`/chats/${chatId}`);
   return data.data; // returns { chat: {...}, messages: [...] }
 };
+
+// Edit a message
+export const editMessage = async (messageId, content) => {
+    const response = await API.put(`/messages/${messageId}/edit`, { content });
+    return response.data;
+};
+
+// Delete a message
+export const deleteMessage = async (messageId) => {
+    const response = await API.delete(`/messages/${messageId}/delete`);
+    return response.data;
+};
+
+// Get message history (optional)
+export const getMessageHistory = async (messageId) => {
+    const response = await API.get(`/messages/${messageId}/history`);
+    return response.data;
+};
