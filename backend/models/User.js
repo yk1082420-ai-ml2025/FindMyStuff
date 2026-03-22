@@ -41,9 +41,10 @@ const userSchema = new mongoose.Schema(
             default: 0,
         },
         activityHistory: {
-            lostPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
-            foundPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
+            lostPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'LostItem' }],
+            foundPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FoundItem' }],
             claims: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Claim' }],
+            noticePosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Notice' }],
         },
         isActive: {
             type: Boolean,

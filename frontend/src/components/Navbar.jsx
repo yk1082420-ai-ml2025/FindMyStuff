@@ -36,6 +36,24 @@ const Navbar = () => {
                         >
                             Home
                         </Link>
+                        <Link
+                            to="/found-items"
+                            className="px-4 py-2 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
+                        >
+                            Found
+                        </Link>
+                        <Link
+                            to="/lost"
+                            className="px-4 py-2 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
+                        >
+                            Lost
+                        </Link>
+                        <Link
+                            to="/notices"
+                            className="px-4 py-2 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
+                        >
+                            Notices
+                        </Link>
 
                         {user ? (
                             <>
@@ -101,6 +119,27 @@ const Navbar = () => {
                             className="block px-4 py-3 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
                         >
                             Home
+                        </Link>
+                        <Link
+                            to="/found-items"
+                            onClick={() => setMobileOpen(false)}
+                            className="block px-4 py-3 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
+                        >
+                            Found
+                        </Link>
+                        <Link
+                            to="/lost"
+                            onClick={() => setMobileOpen(false)}
+                            className="block px-4 py-3 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
+                        >
+                            Lost
+                        </Link>
+                        <Link
+                            to="/notices"
+                            onClick={() => setMobileOpen(false)}
+                            className="block px-4 py-3 text-sm text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
+                        >
+                            Notices
                         </Link>
                         {user ? (
                             <>
