@@ -49,8 +49,6 @@ io.on('connection', (socket) => {
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Make io accessible to controllers
@@ -72,6 +70,9 @@ app.use('/api/reports', require('./routes/reportRoutes'));
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+
+// Make io accessible to routes
+app.set('io', io);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
