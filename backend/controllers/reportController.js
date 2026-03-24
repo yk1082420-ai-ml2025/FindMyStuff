@@ -1,133 +1,158 @@
 const Report = require('../models/Report');
-const User = require('../models/User');
 
-// @desc    Submit a new report
-// @route   POST /api/reports
-// @access  Private
+// Create a new report
 const createReport = async (req, res) => {
     try {
-        const { targetId, targetType, reason, description } = req.body;
-        const reporterId = req.user.id;
+        console.log('createReport called');
+        console.log('Request body:', req.body);
+        console.log('User ID:', req.userId);
 
-        // Prevent duplicate pending reports from the same user for the same target
-        const existingReport = await Report.findOne({
-            reporterId,
-            targetId,
-            status: { $in: ['PENDING', 'REVIEWING'] }
-        });
+        const { targetType, targetId, reason, description, screenshotUrls } = req.body;
 
-        if (existingReport) {
-            return res.status(400).json({
-                success: false,
-                message: 'You have already reported this item and it is currently being reviewed.'
+        if (!targetType || !targetId || !reason) {
+            return res.status(400).json({ 
+                message: 'Missing required fields' 
             });
         }
 
-        const report = await Report.create({
-            reporterId,
-            targetId,
+        let targetModel;
+        if (targetType === 'post') targetModel = 'Post';
+        else if (targetType === 'comment') targetModel = 'Comment';
+        else if (targetType === 'user') targetModel = 'User';
+        else {
+            return res.status(400).json({ message: 'Invalid target type' });
+        }
+
+        const report = new Report({
+            reporter: req.userId,
             targetType,
+            targetId,
+            targetModel,
             reason,
-            description
+            description: description || '',
+            screenshotUrls: screenshotUrls || [],
+            auditLog: [{
+                action: 'created',
+                performedBy: req.userId,
+                details: { reason, targetType, targetId }
+            }]
         });
+
+        const savedReport = await report.save();
+        
+        console.log('✅ Report saved! ID:', savedReport._id);
 
         res.status(201).json({
             success: true,
-            data: report,
-            message: 'Report submitted successfully. Admins will review it shortly.'
+            message: 'Report submitted successfully',
+            data: savedReport
         });
+
     } catch (error) {
-        console.error('Create report error:', error);
-        res.status(500).json({
+        console.error('❌ Error:', error);
+        res.status(500).json({ 
             success: false,
-            message: 'Error submitting report',
-            error: error.message
+            message: 'Server error',
+            error: error.message 
         });
     }
 };
 
-// @desc    Get all reports (with filtering)
-// @route   GET /api/reports
-// @access  Private/Admin
-const getReports = async (req, res) => {
+const getAllReports = async (req, res) => {
     try {
-        const { status, type } = req.query;
-        let query = {};
-
-        if (status) query.status = status;
-        if (type) query.targetType = type;
-
-        const reports = await Report.find(query)
-            .populate('reporterId', 'fullName email')
-            .populate('resolvedBy', 'fullName')
+        const reports = await Report.find()
+            .populate('reporter', 'name email')
             .sort({ createdAt: -1 });
-
-        res.status(200).json({
-            success: true,
-            count: reports.length,
-            data: reports
-        });
+        res.json({ success: true, data: reports });
     } catch (error) {
-        console.error('Get reports error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching reports',
-            error: error.message
-        });
+        res.status(500).json({ message: error.message });
     }
 };
 
-// @desc    Update report status or add admin notes
-// @route   PUT /api/reports/:id
-// @access  Private/Admin
-const updateReport = async (req, res) => {
+const getMyReports = async (req, res) => {
     try {
-        const { status, adminNotes } = req.body;
-        const reportId = req.params.id;
-        const adminId = req.user.id;
+        const reports = await Report.find({ reporter: req.userId })
+            .sort({ createdAt: -1 });
+        res.json({ success: true, data: reports });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
 
-        const updateData = {};
-        if (status) updateData.status = status;
-        if (adminNotes !== undefined) updateData.adminNotes = adminNotes;
-
-        // If marking as resolved or dismissed, track who and when
-        if (['RESOLVED', 'DISMISSED'].includes(status)) {
-            updateData.resolvedBy = adminId;
-            updateData.resolvedAt = new Date();
-        }
-
-        const report = await Report.findByIdAndUpdate(
-            reportId,
-            updateData,
-            { new: true, runValidators: true }
-        )
-        .populate('reporterId', 'fullName email')
-        .populate('resolvedBy', 'fullName');
-
+const getReportById = async (req, res) => {
+    try {
+        const report = await Report.findById(req.params.id)
+            .populate('reporter', 'name email');
+        
         if (!report) {
-            return res.status(404).json({
-                success: false,
-                message: 'Report not found'
-            });
+            return res.status(404).json({ message: 'Report not found' });
+        }
+        
+        res.json({ success: true, data: report });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const updateReportStatus = async (req, res) => {
+    try {
+        const { status, actionTaken, message } = req.body;
+        const report = await Report.findById(req.params.id);
+        
+        if (!report) {
+            return res.status(404).json({ message: 'Report not found' });
         }
 
-        res.status(200).json({
-            success: true,
-            data: report,
-            message: 'Report updated successfully'
+        report.status = status;
+        report.adminResponse = {
+            actionTaken,
+            message,
+            resolvedBy: req.userId,
+            resolvedAt: new Date()
+        };
+        
+        await report.save();
+        res.json({ success: true, data: report });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const deleteReport = async (req, res) => {
+    try {
+        const report = await Report.findById(req.params.id);
+        if (!report) {
+            return res.status(404).json({ message: 'Report not found' });
+        }
+        
+        await report.deleteOne();
+        res.json({ success: true, message: 'Report deleted' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+const getReportStats = async (req, res) => {
+    try {
+        const total = await Report.countDocuments();
+        const pending = await Report.countDocuments({ status: 'pending' });
+        const resolved = await Report.countDocuments({ status: 'resolved' });
+        
+        res.json({ 
+            success: true, 
+            data: { total, pending, resolved } 
         });
     } catch (error) {
-        console.error('Update report error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error updating report',
-            error: error.message
-        });
+        res.status(500).json({ message: error.message });
     }
 };
 
 module.exports = {
     createReport,
-    getReports,
-    updateReport
+    getAllReports,
+    getMyReports,
+    getReportById,
+    updateReportStatus,
+    deleteReport,
+    getReportStats
 };
