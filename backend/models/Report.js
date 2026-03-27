@@ -1,53 +1,92 @@
 const mongoose = require('mongoose');
 
 const reportSchema = new mongoose.Schema({
-    reporterId: {
+    reporter: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
-    },
-    targetId: {
-        type: mongoose.Schema.Types.ObjectId,
-        required: true
+        required: [true, 'Reporter is required']
     },
     targetType: {
         type: String,
-        enum: ['POST_LOST', 'POST_FOUND', 'USER', 'CLAIM', 'MESSAGE'],
-        required: true
+        enum: ['post', 'comment', 'user'],
+        required: [true, 'Target type is required']
+    },
+    targetId: {
+        type: String,
+        required: [true, 'Target ID is required']
+    },
+    targetModel: {
+        type: String,
+        required: true,
+        enum: ['Post', 'Comment', 'User']
     },
     reason: {
         type: String,
-        required: true,
+        required: [true, 'Reason is required'],
         enum: [
-            'SPAM',
-            'HARASSMENT',
-            'FALSE_INFO',
-            'INAPPROPRIATE_CONTENT',
-            'SCAM',
-            'OTHER'
+            'spam',
+            'harassment',
+            'hate_speech',
+            'false_claim',
+            'misinformation',
+            'inappropriate_content',
+            'other'
         ]
+    },
+    title: {
+        type: String,
+        default: function() {
+            return `${this.targetType} reported for ${this.reason}`;
+        }
     },
     description: {
         type: String,
+        trim: true,
         maxlength: 500
     },
+    screenshotUrls: [{
+        type: String
+    }],
     status: {
         type: String,
-        enum: ['PENDING', 'REVIEWING', 'RESOLVED', 'DISMISSED'],
-        default: 'PENDING'
+        enum: ['pending', 'reviewing', 'resolved', 'dismissed'],
+        default: 'pending'
     },
-    adminNotes: {
-        type: String,
-        default: ''
+    adminResponse: {
+        actionTaken: {
+            type: String,
+            enum: ['warning', 'content_removed', 'user_suspended', 'user_banned', 'no_action', 'other'],
+            default: null
+        },
+        message: {
+            type: String,
+            trim: true,
+            maxlength: 1000
+        },
+        resolvedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        resolvedAt: Date
     },
-    resolvedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-    resolvedAt: {
-        type: Date
-    }
-}, { timestamps: true });
+    auditLog: [{
+        action: {
+            type: String,
+            enum: ['created', 'status_updated', 'admin_responded', 'escalated'],
+            required: true
+        },
+        performedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        timestamp: {
+            type: Date,
+            default: Date.now
+        },
+        details: mongoose.Schema.Types.Mixed
+    }]
+}, {
+    timestamps: true
+});
 
-const Report = mongoose.models.Report || mongoose.model('Report', reportSchema);
-module.exports = Report;
+module.exports = mongoose.model('Report', reportSchema);

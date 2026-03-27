@@ -5,6 +5,7 @@ import API from '../api/axios';
 import ChatList from '../components/chat/ChatList';
 import ChatView from '../components/chat/ChatView';
 import { getMyClaims, getReceivedClaims, getMyFoundPosts, getMyLostPosts } from '../api/claims';
+import MyReports from '../components/MyReports';
 import {
     User,
     Mail,
@@ -26,6 +27,7 @@ import {
     Archive,
     Eye,
     ClipboardList,
+    Flag,
 } from 'lucide-react';
 
 const StudentDashboard = () => {
@@ -49,6 +51,7 @@ const StudentDashboard = () => {
     const [myLostPosts, setMyLostPosts] = useState([]);
     const [postsLoading, setPostsLoading] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    
 
     // Handle deep-link from item detail modals (e.g. after claim approval)
     useEffect(() => {
@@ -113,7 +116,6 @@ const StudentDashboard = () => {
         }
     };
 
-
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -159,6 +161,7 @@ const StudentDashboard = () => {
         { id: 'posts', label: 'Your Posts', icon: <ClipboardList className="w-5 h-5" /> },
         { id: 'claims', label: 'Claims', icon: <FileText className="w-5 h-5" /> },
         { id: 'messages', label: 'Messages', icon: <MessageCircle className="w-5 h-5" /> },
+        { id: 'reports', label: 'Reports', icon: <Flag className="w-5 h-5" /> },
         { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
     ];
 
@@ -752,7 +755,28 @@ const StudentDashboard = () => {
                         </>
                     )}
 
-
+                    {/* Reports Tab */}
+                    {activeTab === 'reports' && (
+                        <>
+                            <div className="mb-6">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h1 className="text-2xl font-bold text-surface-dark flex items-center gap-2">
+                                            <Flag className="w-6 h-6 text-primary-600" />
+                                            My Reports
+                                        </h1>
+                                        <p className="text-gray-500 text-sm mt-1">
+                                            Track and manage your reported content
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-white border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm">
+                                <MyReports />
+                            </div>
+                        </>
+                    )}
 
                     {/* Settings Tab */}
                     {activeTab === 'settings' && (
