@@ -6,6 +6,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const reportRoutes = require('./routes/reportRoutes');
+const chatbotRoutes = require('./routes/ChattRoutes');
 
 dotenv.config();
 
@@ -66,8 +67,9 @@ app.use('/api/lost', require('./routes/lostItemRoutes'));
 app.use('/api/found', require('./routes/foundItemRoutes'));
 app.use('/api/notices', require('./routes/noticeRoutes'));
 app.use('/api/reports', reportRoutes);
+app.use('/api/chat', chatbotRoutes);
 
-// Health check
+// Health chec
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });

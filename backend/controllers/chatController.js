@@ -13,16 +13,24 @@ exports.getMyChats = async (req, res) => {
             .sort({ lastMessageAt: -1 });
 
         // Enrich each chat with item details
-        const enriched = await Promise.all(chats.map(async (chat) => {
-            const ItemModel = chat.itemType === 'found' ? FoundItem : LostItem;
-            const item = await ItemModel.findById(chat.itemId).select('title images status postedBy');
-            const otherUser = chat.participants.find(p => p._id.toString() !== req.user._id.toString());
-            return {
-                ...chat.toObject(),
-                item,
-                otherUser
-            };
-        }));
+        const enriched = await Promise.all(
+            chats.map(async (chat) => {
+                const ItemModel = chat.itemType === 'found' ? FoundItem : LostItem;
+
+                const item = await ItemModel.findById(chat.itemId)
+                    .select('title images status postedBy');
+
+                const otherUser = chat.participants.find(
+                    (p) => p._id.toString() !== req.user._id.toString()
+                );
+
+                return {
+                    ...chat.toObject(),
+                    item,
+                    otherUser,
+                };
+            })
+        );
 
         res.status(200).json({ success: true, data: enriched });
     } catch (error) {
@@ -40,27 +48,46 @@ exports.getChatById = async (req, res) => {
             .populate('participants', 'fullName studentId');
 
         if (!chat) {
-            return res.status(404).json({ success: false, message: 'Chat not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Chat not found',
+            });
         }
 
-        const isParticipant = chat.participants.some(p => p._id.toString() === req.user._id.toString());
+        const isParticipant = chat.participants.some(
+            (p) => p._id.toString() === req.user._id.toString()
+        );
+
         if (!isParticipant) {
-            return res.status(403).json({ success: false, message: 'Not authorized to view this chat' });
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to view this chat',
+            });
         }
 
         const ItemModel = chat.itemType === 'found' ? FoundItem : LostItem;
-        const item = await ItemModel.findById(chat.itemId).select('title images status postedBy');
-        const otherUser = chat.participants.find(p => p._id.toString() !== req.user._id.toString());
+
+        const item = await ItemModel.findById(chat.itemId)
+            .select('title images status postedBy');
+
+        const otherUser = chat.participants.find(
+            (p) => p._id.toString() !== req.user._id.toString()
+        );
 
         // Reset unread count for this user
         const unreadCount = chat.unreadCount || new Map();
         unreadCount.set(req.user._id.toString(), 0);
         chat.unreadCount = unreadCount;
+
         await chat.save();
 
         res.status(200).json({
             success: true,
-            data: { ...chat.toObject(), item, otherUser }
+            data: {
+                ...chat.toObject(),
+                item,
+                otherUser,
+            },
         });
     } catch (error) {
         console.error('getChatById error:', error);

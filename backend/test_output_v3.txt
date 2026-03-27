@@ -1,0 +1,45 @@
+﻿[dotenv@17.3.1] injecting env (4) from .env -- tip: ≡ƒöÉ prevent committing .env to code: https://dotenvx.com/precommit
+Testing Gemini API...
+API Key found: true
+API Key found. Length: 39
+API Key with markers: [AIzaSyBYB6vKbyMVwJNe4yM8JIyFITKwseWQ9DA]
+API Key starts with: AIz
+API Key ends with: 9DA
+Sending test request...
+node : Γ¥î Gemini API Test Failed!
+At line:1 char:1
++ node test_gemini.js 2>&1 | Out-File -FilePath 
+test_output_v3.txt -Enc ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Γ¥î Gem 
+   ini API Test Failed!:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Error Name: Error
+Error Message: [GoogleGenerativeAI Error]: Error 
+fetching from https://generativelanguage.googleapis.c
+om/v1beta/models/gemini-1.5-flash:generateContent: 
+[404 Not Found] models/gemini-1.5-flash is not found 
+for API version v1beta, or is not supported for 
+generateContent. Call ListModels to see the list of 
+available models and their supported methods.
+Stack Trace: Error: [GoogleGenerativeAI Error]: 
+Error fetching from https://generativelanguage.google
+apis.com/v1beta/models/gemini-1.5-flash:generateConte
+nt: [404 Not Found] models/gemini-1.5-flash is not 
+found for API version v1beta, or is not supported 
+for generateContent. Call ListModels to see the list 
+of available models and their supported methods.
+    at handleResponseNotOk 
+(C:\Users\hasin\Desktop\ITPM 3RD\Back2U\backend\node_
+modules\@google\generative-ai\dist\index.js:434:11)
+    at process.processTicksAndRejections 
+(node:internal/process/task_queues:105:5)
+    at async makeRequest 
+(C:\Users\hasin\Desktop\ITPM 3RD\Back2U\backend\node_
+modules\@google\generative-ai\dist\index.js:403:9)
+    at async generateContent 
+(C:\Users\hasin\Desktop\ITPM 3RD\Back2U\backend\node_
+modules\@google\generative-ai\dist\index.js:867:22)
+    at async testGemini (C:\Users\hasin\Desktop\ITPM 
+3RD\Back2U\backend\test_gemini.js:25:24)

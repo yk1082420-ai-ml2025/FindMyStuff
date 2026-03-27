@@ -1,0 +1,12 @@
+﻿[dotenv@17.3.1] injecting env (4) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+Testing Gemini API...
+API Key found: true
+API Key found. Length: 39
+API Key with markers: [AIzaSyB1OgsQJ3DFeRnl7zaQAbprsfTHly1trVg]
+API Key starts with: AIz
+API Key ends with: rVg
+Sending test request...
+Error properties: [ 'status', 'statusText', 'errorDetails' ]
+status: 404
+statusText: Not Found
+errorDetails: undefined
