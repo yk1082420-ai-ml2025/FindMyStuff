@@ -1,119 +1,245 @@
-const Chat = require('../models/Chat');
-const Message = require('../models/Message');
-const Item = require('../models/Item');
-const Claim = require('../models/Claim');
+const Report = require('../models/Report');
 
-// @desc    Mark item as returned and auto-lock chat
-// @route   POST /api/return
-// @access  Private
-exports.markItemReturned = async (req, res) => {
-    try {
-        const { itemId, chatId } = req.body;
-        const userId = req.user.id;
+// Create a new report
+exports.createReport = async (req, res) => {
+  try {
+    const { targetType, targetId, reason, description, screenshotUrls } = req.body;
 
-        // 1. Item එක සොයන්න
-        const item = await Item.findById(itemId);
-        if (!item) {
-            return res.status(404).json({
-                success: false,
-                message: 'Item not found'
-            });
-        }
-
-        // 2. User එකට අයිතිය තියෙනවද? (Item owner පමණයි return කරන්න පුළුවන්)
-        if (item.userId.toString() !== userId) {
-            return res.status(403).json({
-                success: false,
-                message: 'Only item owner can mark as returned'
-            });
-        }
-
-        // 3. Item status එක update කරන්න
-        item.status = 'RETURNED';
-        item.returnedAt = new Date();
-        await item.save();
-
-        // 4. 🔒 AUTO-LOCK THE CHAT
-        const chat = await Chat.findById(chatId);
-        if (chat && chat.status === 'ACTIVE') {
-            chat.status = 'LOCKED';
-            chat.lockedAt = new Date();
-            await chat.save();
-
-            // 5. System message එකක් එකතු කරන්න
-            await Message.create({
-                chatId: chatId,
-                senderId: userId,
-                content: '✅ Item has been returned. This chat is now locked and read-only.',
-                type: 'SYSTEM'
-            });
-
-            // 6. Claim එකත් update කරන්න (if exists)
-            const claim = await Claim.findOne({ 
-                itemId: itemId,
-                status: 'approved' 
-            });
-            if (claim) {
-                claim.status = 'resolved';
-                claim.resolvedAt = new Date();
-                claim.resolvedBy = userId;
-                await claim.save();
-            }
-        }
-
-        res.status(200).json({
-            success: true,
-            message: 'Item marked as returned and chat locked',
-            data: {
-                itemId: itemId,
-                chatId: chatId,
-                itemStatus: item.status,
-                chatStatus: chat?.status || 'NOT_FOUND',
-                lockedAt: chat?.lockedAt || null
-            }
-        });
-
-    } catch (error) {
-        console.error('Return error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error processing return',
-            error: error.message
-        });
+    // Validation
+    if (!targetType || !targetId || !reason) {
+      return res.status(400).json({ message: 'Missing required fields' });
     }
+
+    // Determine target model
+    let targetModel;
+    switch (targetType) {
+      case 'post':
+        targetModel = 'Post';
+        break;
+      case 'comment':
+        targetModel = 'Comment';
+        break;
+      case 'user':
+        targetModel = 'User';
+        break;
+      default:
+        return res.status(400).json({ message: 'Invalid target type' });
+    }
+
+    const report = new Report({
+      reporter: req.userId,
+      targetType,
+      targetId,
+      targetModel,
+      reason,
+      description,
+      screenshotUrls: screenshotUrls || [],
+      auditLog: [{
+        action: 'created',
+        performedBy: req.userId,
+        details: { reason, targetType, targetId }
+      }]
+    });
+
+    await report.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Report submitted successfully',
+      data: report
+    });
+  } catch (error) {
+    console.error('Create report error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 };
 
-// @desc    Check if item is returned
-// @route   GET /api/return/check/:itemId
-// @access  Private
-exports.checkReturnStatus = async (req, res) => {
-    try {
-        const item = await Item.findById(req.params.itemId);
-        
-        if (!item) {
-            return res.status(404).json({
-                success: false,
-                message: 'Item not found'
-            });
-        }
+// Get all reports (Admin only)
+exports.getAllReports = async (req, res) => {
+  try {
+    const { status, targetType, page = 1, limit = 10 } = req.query;
+    
+    const filter = {};
+    if (status) filter.status = status;
+    if (targetType) filter.targetType = targetType;
 
-        const chat = await Chat.findOne({ itemId: req.params.itemId });
+    const reports = await Report.find(filter)
+      .populate('reporter', 'name email')
+      .populate('adminResponse.resolvedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit);
 
-        res.status(200).json({
-            success: true,
-            data: {
-                isReturned: item.status === 'RETURNED',
-                returnedAt: item.returnedAt || null,
-                itemStatus: item.status,
-                chatStatus: chat?.status || null,
-                chatLocked: chat?.status === 'LOCKED'
-            }
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Error checking return status',
-            error: error.message
-        });
+    const total = await Report.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: reports,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get reports error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get user's own reports
+exports.getMyReports = async (req, res) => {
+  try {
+    const reports = await Report.find({ reporter: req.userId })
+      .sort({ createdAt: -1 })
+      .populate('adminResponse.resolvedBy', 'name email');
+
+    res.json({
+      success: true,
+      data: reports
+    });
+  } catch (error) {
+    console.error('Get my reports error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get single report by ID
+exports.getReportById = async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id)
+      .populate('reporter', 'name email')
+      .populate('adminResponse.resolvedBy', 'name email');
+
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
     }
+
+    // Check if user is admin or the reporter
+    if (req.user.role !== 'admin' && report.reporter._id.toString() !== req.userId.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    res.json({
+      success: true,
+      data: report
+    });
+  } catch (error) {
+    console.error('Get report error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Update report status and add admin response (Admin only)
+exports.updateReportStatus = async (req, res) => {
+  try {
+    const { status, actionTaken, message } = req.body;
+    const reportId = req.params.id;
+
+    if (!status) {
+      return res.status(400).json({ message: 'Status is required' });
+    }
+
+    const report = await Report.findById(reportId);
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    const updateData = {
+      status,
+      $push: {
+        auditLog: {
+          action: 'status_updated',
+          performedBy: req.userId,
+          details: { oldStatus: report.status, newStatus: status }
+        }
+      }
+    };
+
+    // If status is resolved or dismissed, add admin response
+    if (status === 'resolved' || status === 'dismissed') {
+      updateData.adminResponse = {
+        actionTaken: actionTaken || (status === 'dismissed' ? 'no_action' : 'other'),
+        message: message || '',
+        resolvedBy: req.userId,
+        resolvedAt: new Date()
+      };
+      
+      updateData.$push.auditLog = {
+        action: 'admin_responded',
+        performedBy: req.userId,
+        details: { actionTaken, message, status }
+      };
+    }
+
+    const updatedReport = await Report.findByIdAndUpdate(
+      reportId,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('adminResponse.resolvedBy', 'name email');
+
+    res.json({
+      success: true,
+      message: 'Report status updated successfully',
+      data: updatedReport
+    });
+  } catch (error) {
+    console.error('Update report error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Delete report (Archive) - Admin only
+exports.deleteReport = async (req, res) => {
+  try {
+    const report = await Report.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    await report.remove();
+    res.json({
+      success: true,
+      message: 'Report deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete report error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Get report statistics (Admin only)
+exports.getReportStats = async (req, res) => {
+  try {
+    const stats = await Report.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const reasonStats = await Report.aggregate([
+      {
+        $group: {
+          _id: '$reason',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        statusStats: stats,
+        reasonStats: reasonStats,
+        totalReports: await Report.countDocuments()
+      }
+    });
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 };

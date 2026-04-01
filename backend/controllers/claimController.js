@@ -4,6 +4,7 @@ const Message = require('../models/Message');
 const FoundItem = require('../models/FoundItem');
 const LostItem = require('../models/LostItem');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 
 // Helper to get item model by type
 const getItemModel = (itemType) => itemType === 'found' ? FoundItem : LostItem;
@@ -65,6 +66,24 @@ exports.createClaim = async (req, res) => {
         item.activeClaim = claim._id;
         await item.save();
 
+        // Create notification for the post owner
+        const claimant = await User.findById(claimantId).select('fullName');
+        const notification = await Notification.create({
+            recipient: item.postedBy,
+            type: 'claim',
+            title: 'New Claim on Your Post',
+            message: `${claimant?.fullName || 'Someone'} submitted a claim on "${item.title}"`,
+            relatedId: claim._id,
+            itemType,
+            itemId: itemId
+        });
+
+        // Push real-time notification via Socket.IO
+        const io = req.app.get('io');
+        if (io) {
+            io.to(item.postedBy.toString()).emit('new_notification', notification);
+        }
+
         res.status(201).json({ success: true, data: claim });
     } catch (error) {
         console.error('createClaim error:', error);
@@ -110,7 +129,7 @@ exports.getMyClaims = async (req, res) => {
         // Populate each claim with item details
         const populated = await Promise.all(claims.map(async (claim) => {
             const ItemModel = getItemModel(claim.itemType);
-            const item = await ItemModel.findById(claim.itemId).select('title images status postedBy');
+            const item = await ItemModel.findById(claim.itemId).populate('postedBy', 'fullName email profilePhoto');
             return { ...claim.toObject(), item };
         }));
 
@@ -141,7 +160,7 @@ exports.getReceivedClaims = async (req, res) => {
         // Enrich each claim with item details
         const populated = await Promise.all(claims.map(async (claim) => {
             const ItemModel = getItemModel(claim.itemType);
-            const item = await ItemModel.findById(claim.itemId).select('title images status postedBy');
+            const item = await ItemModel.findById(claim.itemId).populate('postedBy', 'fullName email profilePhoto');
             return { ...claim.toObject(), item };
         }));
 
@@ -232,6 +251,21 @@ exports.approveClaim = async (req, res) => {
             content: `✅ Claim approved! You can now coordinate ${action} the item here.`,
             type: 'SYSTEM'
         });
+
+        // Notify the claimant that their claim was approved
+        const ownerName = req.user.fullName || 'The post owner';
+        const notification = await Notification.create({
+            recipient: claim.claimantId,
+            type: 'message',
+            title: 'Claim Approved',
+            message: `${ownerName} approved your claim on "${item.title}". A chat has been started.`,
+            relatedId: chat._id
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(claim.claimantId.toString()).emit('new_notification', notification);
+        }
 
         res.status(200).json({
             success: true,

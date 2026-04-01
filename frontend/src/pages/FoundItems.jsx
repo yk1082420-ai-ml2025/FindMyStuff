@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import API from '../api/axios';
 import ClaimPanel from '../components/claims/ClaimPanel';
@@ -622,6 +622,17 @@ const FoundItems = () => {
         fetchItems();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, search, category, location, color, brand, dateFrom, dateTo]);
+
+    // Handle deep-link to open a specific item from Dashboard claims
+    const locationObj = useLocation();
+    useEffect(() => {
+        if (locationObj.state?.openItem) {
+            setSelectedItem(locationObj.state.openItem);
+            setShowDetail(true);
+            // Clear the state so it doesn't reopen on refresh
+            window.history.replaceState({}, '');
+        }
+    }, [locationObj.state]);
 
     const showToast = (text, type = 'success') => {
         setToast({ text, type });

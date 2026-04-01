@@ -5,6 +5,7 @@ import API from '../api/axios';
 import ChatList from '../components/chat/ChatList';
 import ChatView from '../components/chat/ChatView';
 import { getMyClaims, getReceivedClaims, getMyFoundPosts, getMyLostPosts } from '../api/claims';
+import MyReports from '../components/MyReports';
 import {
     User,
     Mail,
@@ -26,6 +27,7 @@ import {
     Archive,
     Eye,
     ClipboardList,
+    Flag,
 } from 'lucide-react';
 
 const StudentDashboard = () => {
@@ -49,8 +51,9 @@ const StudentDashboard = () => {
     const [myLostPosts, setMyLostPosts] = useState([]);
     const [postsLoading, setPostsLoading] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    
 
-    // Handle deep-link from item detail modals (e.g. after claim approval)
+    // Handle deep-link from notifications and item detail modals
     useEffect(() => {
         if (location.state?.tab) {
             setActiveTab(location.state.tab);
@@ -113,7 +116,6 @@ const StudentDashboard = () => {
         }
     };
 
-
     const handleSave = async () => {
         setSaving(true);
         try {
@@ -169,6 +171,7 @@ const StudentDashboard = () => {
         { id: 'posts', label: 'Your Posts', icon: <ClipboardList className="w-5 h-5" /> },
         { id: 'claims', label: 'Claims', icon: <FileText className="w-5 h-5" /> },
         { id: 'messages', label: 'Messages', icon: <MessageCircle className="w-5 h-5" /> },
+        { id: 'reports', label: 'Reports', icon: <Flag className="w-5 h-5" /> },
         { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
     ];
 
@@ -625,7 +628,9 @@ const StudentDashboard = () => {
                                                         claimed: 'bg-blue-50 text-blue-700 border-blue-200',
                                                     };
                                                     return (
-                                                        <div key={claim._id} className="bg-white border border-gray-200 rounded-2xl p-5">
+                                                        <div key={claim._id} 
+                                                             onClick={() => navigate(claim.itemType === 'found' ? '/found-items' : '/lost', { state: { openItem: claim.item } })}
+                                                             className="bg-white border border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-blue-200 hover:shadow-md transition-all group">
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div className="flex items-center gap-3">
                                                                     {claim.item?.images?.[0]
@@ -644,7 +649,7 @@ const StudentDashboard = () => {
                                                             </div>
                                                             {claim.status === 'approved' && claim.chatId && (
                                                                 <button
-                                                                    onClick={() => { setSelectedChat({ _id: claim.chatId }); setActiveTab('messages'); }}
+                                                                    onClick={(e) => { e.stopPropagation(); setSelectedChat({ _id: claim.chatId }); setActiveTab('messages'); }}
                                                                     className="mt-3 w-full py-2 text-xs bg-blue-50 border border-blue-200 text-blue-700 rounded-xl hover:bg-blue-100 transition-all font-semibold flex items-center justify-center gap-1.5"
                                                                 >
                                                                     <MessageCircle className="w-3.5 h-3.5" /> Open Chat
@@ -680,7 +685,9 @@ const StudentDashboard = () => {
                                                         claimed: 'bg-blue-50 text-blue-700 border-blue-200',
                                                     };
                                                     return (
-                                                        <div key={claim._id} className="bg-white border border-gray-200 rounded-2xl p-5">
+                                                        <div key={claim._id} 
+                                                             onClick={() => navigate(claim.itemType === 'found' ? '/found-items' : '/lost', { state: { openItem: claim.item } })}
+                                                             className="bg-white border border-gray-200 rounded-2xl p-5 cursor-pointer hover:border-blue-200 hover:shadow-md transition-all group">
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div className="flex items-center gap-3">
                                                                     {claim.item?.images?.[0]
@@ -699,7 +706,7 @@ const StudentDashboard = () => {
                                                             </div>
                                                             {claim.status === 'pending' && (
                                                                 <button
-                                                                    onClick={() => navigate(claim.itemType === 'found' ? '/found-items' : '/lost')}
+                                                                    onClick={(e) => { e.stopPropagation(); navigate(claim.itemType === 'found' ? '/found-items' : '/lost', { state: { openItem: claim.item } }); }}
                                                                     className="mt-3 w-full py-2 text-xs bg-amber-50 border border-amber-200 text-amber-700 rounded-xl hover:bg-amber-100 transition-all font-semibold flex items-center justify-center gap-1.5"
                                                                 >
                                                                     <Eye className="w-3.5 h-3.5" /> Review on Post
@@ -707,7 +714,7 @@ const StudentDashboard = () => {
                                                             )}
                                                             {claim.status === 'approved' && claim.chatId && (
                                                                 <button
-                                                                    onClick={() => { setSelectedChat({ _id: claim.chatId }); setActiveTab('messages'); }}
+                                                                    onClick={(e) => { e.stopPropagation(); setSelectedChat({ _id: claim.chatId }); setActiveTab('messages'); }}
                                                                     className="mt-3 w-full py-2 text-xs bg-blue-50 border border-blue-200 text-blue-700 rounded-xl hover:bg-blue-100 transition-all font-semibold flex items-center justify-center gap-1.5"
                                                                 >
                                                                     <MessageCircle className="w-3.5 h-3.5" /> Open Chat
@@ -763,7 +770,28 @@ const StudentDashboard = () => {
                         </>
                     )}
 
-
+                    {/* Reports Tab */}
+                    {activeTab === 'reports' && (
+                        <>
+                            <div className="mb-6">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h1 className="text-2xl font-bold text-surface-dark flex items-center gap-2">
+                                            <Flag className="w-6 h-6 text-primary-600" />
+                                            My Reports
+                                        </h1>
+                                        <p className="text-gray-500 text-sm mt-1">
+                                            Track and manage your reported content
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-white border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm">
+                                <MyReports />
+                            </div>
+                        </>
+                    )}
 
                     {/* Settings Tab */}
                     {activeTab === 'settings' && (

@@ -5,6 +5,8 @@ const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
 const connectDB = require('./config/db');
+const reportRoutes = require('./routes/reportRoutes');
+const chatbotRoutes = require('./routes/ChattRoutes');
 
 dotenv.config();
 
@@ -64,15 +66,14 @@ app.use('/api/contact', require('./routes/contactRoutes'));
 app.use('/api/lost', require('./routes/lostItemRoutes'));
 app.use('/api/found', require('./routes/foundItemRoutes'));
 app.use('/api/notices', require('./routes/noticeRoutes'));
-app.use('/api/reports', require('./routes/reportRoutes'));
+app.use('/api/reports', reportRoutes);
+app.use('/api/chat', chatbotRoutes);
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 
-// Health check
+// Health chec
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
-
-// Make io accessible to routes
-app.set('io', io);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

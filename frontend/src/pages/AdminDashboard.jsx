@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import API from "../api/axios";
 import {
   Users,
@@ -26,11 +26,17 @@ import {
   AlertTriangle,
   Filter,
   RefreshCw,
+  Flag, // Add Flag icon for reports
+  Eye,
+  Check,
+  XCircle,
+  Clock as ClockIcon
 } from "lucide-react";
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -51,6 +57,38 @@ const AdminDashboard = () => {
   const [message, setMessage] = useState({ text: "", type: "" });
   const [formLoading, setFormLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("users");
+
+  // Handle deep-link from notifications
+  useEffect(() => {
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
+    }
+  }, [location.state]);
+
+  // ─── Reports state ─────────────────────────────────────────
+  const [reports, setReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsPage, setReportsPage] = useState(1);
+  const [reportsTotalPages, setReportsTotalPages] = useState(1);
+  const [reportsTotalItems, setReportsTotalItems] = useState(0);
+  const [reportsStats, setReportsStats] = useState({
+    total: 0,
+    pending: 0,
+    resolved: 0,
+    dismissed: 0
+  });
+  const [showReportViewModal, setShowReportViewModal] = useState(false);
+  const [showReportStatusModal, setShowReportStatusModal] = useState(false);
+  const [showReportDeleteModal, setShowReportDeleteModal] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [reportStatusFilter, setReportStatusFilter] = useState("");
+  const [reportTypeFilter, setReportTypeFilter] = useState("");
+  const [reportStatusUpdate, setReportStatusUpdate] = useState({
+    status: "",
+    adminNotes: "",
+    resolutionAction: ""
+  });
+  const [reportStatusLoading, setReportStatusLoading] = useState(false);
 
   // ─── Notices state ─────────────────────────────────────────
   const CATEGORIES = ['alert', 'event', 'general', 'tips'];
@@ -99,6 +137,123 @@ const AdminDashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, noticesPage]);
 
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      fetchReports();
+      fetchReportsStats();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, reportsPage, reportStatusFilter, reportTypeFilter]);
+
+  // ─── Reports functions ─────────────────────────────────────────
+  const fetchReports = async () => {
+    setReportsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.append("page", reportsPage);
+      params.append("limit", 10);
+      if (reportStatusFilter) params.append("status", reportStatusFilter);
+      if (reportTypeFilter) params.append("reportType", reportTypeFilter);
+      
+      const { data } = await API.get(`/reports/admin/all?${params.toString()}`);
+      setReports(data.data);
+      setReportsTotalPages(data.pagination?.pages || 1);
+      setReportsTotalItems(data.pagination?.total || 0);
+    } catch (error) {
+      console.error("Failed to fetch reports", error);
+      setMessage({ text: "Failed to load reports", type: "error" });
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  const fetchReportsStats = async () => {
+    try {
+      const { data } = await API.get('/reports/admin/stats');
+      setReportsStats(data.data);
+    } catch (error) {
+      console.error("Failed to fetch reports stats", error);
+    }
+  };
+
+  const handleReportStatusUpdate = async () => {
+    setReportStatusLoading(true);
+    try {
+      await API.put(`/reports/admin/${selectedReport._id}`, reportStatusUpdate);
+      setShowReportStatusModal(false);
+      setMessage({ text: "Report status updated successfully!", type: "success" });
+      setTimeout(() => setMessage({ text: "", type: "" }), 3000);
+      fetchReports();
+      fetchReportsStats();
+    } catch (error) {
+      setMessage({ 
+        text: error.response?.data?.message || "Failed to update status", 
+        type: "error" 
+      });
+    } finally {
+      setReportStatusLoading(false);
+    }
+  };
+
+  const handleReportDelete = async () => {
+    try {
+      await API.delete(`/reports/admin/${selectedReport._id}`);
+      setShowReportDeleteModal(false);
+      setMessage({ text: "Report deleted successfully!", type: "success" });
+      setTimeout(() => setMessage({ text: "", type: "" }), 3000);
+      fetchReports();
+      fetchReportsStats();
+    } catch (error) {
+      setMessage({ 
+        text: error.response?.data?.message || "Failed to delete report", 
+        type: "error" 
+      });
+    }
+  };
+
+  const openReportViewModal = (report) => {
+    setSelectedReport(report);
+    setShowReportViewModal(true);
+  };
+
+  const openReportStatusModal = (report) => {
+    setSelectedReport(report);
+    setReportStatusUpdate({
+      status: report.status,
+      adminNotes: report.adminNotes || "",
+      resolutionAction: report.resolution?.action || "none"
+    });
+    setShowReportStatusModal(true);
+  };
+
+  const openReportDeleteModal = (report) => {
+    setSelectedReport(report);
+    setShowReportDeleteModal(true);
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      pending: "bg-amber-50 text-amber-600 border-amber-200",
+      under_review: "bg-blue-50 text-blue-600 border-blue-200",
+      resolved: "bg-emerald-50 text-emerald-600 border-emerald-200",
+      dismissed: "bg-gray-50 text-gray-500 border-gray-200"
+    };
+    return colors[status] || colors.pending;
+  };
+  const getReasonColor = (reason) => {
+    const colors = {
+      spam: "bg-orange-50 text-orange-600 border-orange-200",
+      harassment: "bg-red-50 text-red-600 border-red-200",
+      hate_speech: "bg-purple-50 text-purple-600 border-purple-200",
+      false_claim: "bg-blue-50 text-blue-600 border-blue-200",
+      misinformation: "bg-cyan-50 text-cyan-600 border-cyan-200",
+      inappropriate_content: "bg-pink-50 text-pink-600 border-pink-200",
+      other: "bg-gray-50 text-gray-600 border-gray-200"
+    };
+    return colors[reason] || colors.other;
+  };
+
+  // ─── Notices functions (your existing code) ─────────────────────────
   const fetchNotices = async () => {
     setNoticesLoading(true);
     try {
@@ -192,6 +347,7 @@ const AdminDashboard = () => {
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
 
+  // ─── User functions (your existing code) ─────────────────────────
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -226,21 +382,6 @@ const AdminDashboard = () => {
     e.preventDefault();
     setFormLoading(true);
     try {
-      if (createForm.studentId.length !== 10) {
-        setMessage({ text: 'ID should be exactly 10 characters', type: 'error' });
-        setFormLoading(false);
-        return;
-      }
-      if (createForm.fullName.length > 30) {
-        setMessage({ text: 'Full Name must be 30 characters or less', type: 'error' });
-        setFormLoading(false);
-        return;
-      }
-      if (!/^[a-zA-Z\s]+$/.test(createForm.fullName)) {
-        setMessage({ text: 'Full Name must only contain English letters and spaces', type: 'error' });
-        setFormLoading(false);
-        return;
-      }
       await API.post("/users", createForm);
       setShowCreateModal(false);
       setCreateForm({
@@ -268,18 +409,6 @@ const AdminDashboard = () => {
     e.preventDefault();
     setFormLoading(true);
     try {
-      const nameToValidate = editForm.fullName || selectedUser.fullName;
-      if (nameToValidate.length > 30) {
-        setMessage({ text: 'Full Name must be 30 characters or less', type: 'error' });
-        setFormLoading(false);
-        return;
-      }
-      if (!/^[a-zA-Z\s]+$/.test(nameToValidate)) {
-        setMessage({ text: 'Full Name must only contain English letters and spaces', type: 'error' });
-        setFormLoading(false);
-        return;
-      }
-      // Always include all required fields, fallback to selectedUser values
       const payload = {
         studentId: selectedUser.studentId,
         fullName: editForm.fullName || selectedUser.fullName,
@@ -361,6 +490,7 @@ const AdminDashboard = () => {
       icon: <LayoutDashboard className="w-5 h-5" />,
     },
     { id: "users", label: "Users", icon: <Users className="w-5 h-5" /> },
+    { id: "reports", label: "Reports", icon: <Flag className="w-5 h-5" /> },
     { id: "notices", label: "Notices", icon: <Megaphone className="w-5 h-5" /> },
   ];
 
@@ -392,6 +522,37 @@ const AdminDashboard = () => {
       icon: <Shield className="w-5 h-5" />,
       bg: "bg-amber-50",
       text: "text-amber-600",
+    },
+  ];
+
+  const reportStatCards = [
+    {
+      label: "Total Reports",
+      value: reportsStats.total,
+      icon: <Flag className="w-5 h-5" />,
+      bg: "bg-red-50",
+      text: "text-red-600",
+    },
+    {
+      label: "Pending",
+      value: reportsStats.pending,
+      icon: <ClockIcon className="w-5 h-5" />,
+      bg: "bg-amber-50",
+      text: "text-amber-600",
+    },
+    {
+      label: "Resolved",
+      value: reportsStats.resolved,
+      icon: <CheckCircle className="w-5 h-5" />,
+      bg: "bg-emerald-50",
+      text: "text-emerald-600",
+    },
+    {
+      label: "Dismissed",
+      value: reportsStats.dismissed,
+      icon: <XCircle className="w-5 h-5" />,
+      bg: "bg-gray-50",
+      text: "text-gray-600",
     },
   ];
 
@@ -517,7 +678,7 @@ const AdminDashboard = () => {
                 <h3 className="font-semibold text-surface-dark mb-4">
                   Quick Actions
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <button
                     onClick={() => {
                       setActiveTab("users");
@@ -536,16 +697,16 @@ const AdminDashboard = () => {
                     </div>
                   </button>
                   <button
-                    onClick={() => setActiveTab("users")}
-                    className="p-4 bg-violet-50 border border-violet-200/60 rounded-xl flex items-center gap-3 hover:bg-violet-100/50 transition-all"
+                    onClick={() => setActiveTab("reports")}
+                    className="p-4 bg-red-50 border border-red-200/60 rounded-xl flex items-center gap-3 hover:bg-red-100/50 transition-all"
                   >
-                    <Users className="w-5 h-5 text-accent-500" />
+                    <Flag className="w-5 h-5 text-red-500" />
                     <div className="text-left">
                       <p className="text-sm font-medium text-surface-dark">
-                        Manage Users
+                        Manage Reports
                       </p>
                       <p className="text-xs text-gray-500">
-                        View, edit, or remove users
+                        Review and moderate reported content
                       </p>
                     </div>
                   </button>
@@ -773,105 +934,90 @@ const AdminDashboard = () => {
               </div>
             </>
           )}
-
-          {/* Notices Tab */}
-          {activeTab === "notices" && (
+          {/* Reports Tab */}
+          {activeTab === "reports" && (
             <>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h1 className="text-2xl font-bold text-surface-dark">Notice Management</h1>
-                  <p className="text-gray-500 text-sm mt-1">{noticesTotalItems} total notices</p>
-                </div>
-                <button
-                  onClick={openNoticeCreate}
-                  className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-medium text-sm hover:from-amber-600 hover:to-orange-600 transition-all shadow-md shadow-amber-500/20 flex items-center gap-2 self-start"
-                >
-                  <Plus className="w-4 h-4" /> Create Notice
-                </button>
+                <div><h1 className="text-2xl font-bold text-surface-dark">Report Management</h1><p className="text-gray-500 text-sm mt-1">{reportsTotalItems} total reports</p></div>
+                <button onClick={() => fetchReports()} className="px-5 py-2.5 bg-white border border-gray-200 rounded-xl font-medium text-sm text-gray-600 hover:bg-gray-50 transition-all flex items-center gap-2"><RefreshCw className="w-4 h-4" /> Refresh</button>
               </div>
-
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {reportStatCards.map((stat, i) => (
+                  <div key={i} className="p-5 bg-white border border-gray-200/60 rounded-2xl hover:shadow-md transition-all">
+                    <div className="flex items-center justify-between mb-3"><span className="text-sm text-gray-500">{stat.label}</span><div className={`w-9 h-9 rounded-lg ${stat.bg} flex items-center justify-center ${stat.text}`}>{stat.icon}</div></div>
+                    <p className="text-2xl font-bold text-surface-dark">{stat.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                <select value={reportStatusFilter} onChange={(e) => { setReportStatusFilter(e.target.value); setReportsPage(1); }} className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-surface-dark text-sm focus:outline-none focus:border-primary-500 appearance-none cursor-pointer">
+                  <option value="">All Status</option><option value="pending">Pending</option><option value="reviewing">Under Review</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option>
+                </select>
+                <select value={reportTypeFilter} onChange={(e) => { setReportTypeFilter(e.target.value); setReportsPage(1); }} className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-surface-dark text-sm focus:outline-none focus:border-primary-500 appearance-none cursor-pointer">
+                  <option value="">All Types</option><option value="spam">Spam</option><option value="harassment">Harassment</option><option value="hate_speech">Hate Speech</option><option value="false_claim">False Claim</option><option value="misinformation">Misinformation</option><option value="inappropriate_content">Inappropriate Content</option><option value="other">Other</option>
+                </select>
+              </div>
               <div className="bg-white border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm">
-                {noticesLoading ? (
-                  <div className="flex items-center justify-center py-20">
-                    <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : notices.length === 0 ? (
-                  <div className="text-center py-20">
-                    <Megaphone className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-400">No notices yet</p>
-                  </div>
-                ) : (
+                {reportsLoading ? (<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" /></div>) : reports.length === 0 ? (<div className="text-center py-20"><Flag className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">No reports found</p></div>) : (
                   <div className="overflow-x-auto">
                     <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200/60 bg-gray-50/50">
-                          <th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Notice</th>
-                          <th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Category</th>
-                          <th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Priority</th>
-                          <th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Status</th>
-                          <th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Expires</th>
-                          <th className="text-right text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Actions</th>
-                        </tr>
-                      </thead>
+                      <thead><tr className="border-b border-gray-200/60 bg-gray-50/50"><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Title</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Type</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Reported By</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Status</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Target</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Date</th><th className="text-right text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Actions</th> </tr></thead>
                       <tbody>
-                        {notices.map((n) => (
-                          <tr key={n._id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                {n.attachments?.[0] && n.attachments[0].match(/\.(jpeg|jpg|gif|png|webp)$/i)
-                                  ? <img src={`http://localhost:5000${n.attachments[0]}`} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-100 shrink-0" />
-                                  : <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0"><Megaphone className="w-5 h-5 text-amber-300" /></div>
-                                }
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium text-surface-dark truncate">{n.title}</p>
-                                  <p className="text-xs text-gray-400 truncate max-w-[200px]">{n.content}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-200/60 rounded-lg text-xs font-medium capitalize">{n.category}</span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize ${
-                                n.priority === 'high' ? 'bg-red-50 text-red-600 border border-red-200' : n.priority === 'medium' ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-gray-50 text-gray-600 border border-gray-200'
-                              }`}>{n.priority}</span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center gap-1.5 text-xs ${n.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
-                                <span className={`w-2 h-2 rounded-full ${n.isActive ? 'bg-emerald-500' : 'bg-gray-300'}`} />
-                                {n.isActive ? 'Active' : 'Expired'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4"><span className="text-sm text-gray-600">{formatDate(n.expiryDate)}</span></td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center justify-end gap-1">
-                                <button onClick={() => openNoticeEdit(n)} className="p-2 text-gray-400 hover:text-amber-500 hover:bg-gray-100 rounded-lg transition-all" title="Edit"><Edit3 className="w-4 h-4" /></button>
-                                <button onClick={() => { setSelectedNotice(n); setShowDeleteNotice(true); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-gray-100 rounded-lg transition-all" title="Delete"><Trash2 className="w-4 h-4" /></button>
-                              </div>
-                            </td>
+                        {reports.map((report) => (
+                          <tr key={report._id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4"><div><p className="text-sm font-medium text-surface-dark truncate max-w-[200px]">{report.title}</p><p className="text-xs text-gray-400 truncate max-w-[200px]">{report.description?.substring(0, 50)}...</p></div> </td>
+                            <td className="px-6 py-4"><span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getReasonColor(report.reason)}`}>{report.reason?.replace(/_/g, ' ')}</span> </td>
+                            <td className="px-6 py-4"><span className="text-sm text-gray-600">{report.reporter?.name || report.reporter?.email || 'Unknown'}</span> </td>
+                            <td className="px-6 py-4"><span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getStatusColor(report.status)}`}>{report.status}</span> </td>
+                            <td className="px-6 py-4"><span className="text-xs text-gray-500 capitalize">{report.targetType}: {report.targetId?.slice(-6)}</span> </td>
+                            <td className="px-6 py-4"><span className="text-sm text-gray-500">{formatDate(report.createdAt)}</span> </td>
+                            <td className="px-6 py-4"><div className="flex items-center justify-end gap-1"><button onClick={() => openReportViewModal(report)} className="p-2 text-gray-400 hover:text-blue-500 hover:bg-gray-100 rounded-lg transition-all"><Eye className="w-4 h-4" /></button><button onClick={() => openReportStatusModal(report)} className="p-2 text-gray-400 hover:text-amber-500 hover:bg-gray-100 rounded-lg transition-all"><Edit3 className="w-4 h-4" /></button><button onClick={() => openReportDeleteModal(report)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-gray-100 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button></div> </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 )}
+                {reportsTotalPages > 1 && (<div className="flex items-center justify-between px-6 py-4 border-t border-gray-200/60"><p className="text-sm text-gray-500">Page {reportsPage} of {reportsTotalPages}</p><div className="flex gap-2"><button onClick={() => setReportsPage(p => Math.max(1, p - 1))} disabled={reportsPage === 1} className="p-2 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button><button onClick={() => setReportsPage(p => Math.min(reportsTotalPages, p + 1))} disabled={reportsPage === reportsTotalPages} className="p-2 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button></div></div>)}
+              </div>
+            </>
+          )}
 
-                {noticesTotalPages > 1 && (
-                  <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200/60">
-                    <p className="text-sm text-gray-500">Page {noticesPage} of {noticesTotalPages}</p>
-                    <div className="flex gap-2">
-                      <button onClick={() => setNoticesPage(p => Math.max(1, p - 1))} disabled={noticesPage === 1} className="p-2 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
-                      <button onClick={() => setNoticesPage(p => Math.min(noticesTotalPages, p + 1))} disabled={noticesPage === noticesTotalPages} className="p-2 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
-                    </div>
+          {/* Notices Tab */}
+          {activeTab === "notices" && (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div><h1 className="text-2xl font-bold text-surface-dark">Notice Management</h1><p className="text-gray-500 text-sm mt-1">{noticesTotalItems} total notices</p></div>
+                <button onClick={openNoticeCreate} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-medium text-sm hover:from-amber-600 hover:to-orange-600 transition-all shadow-md shadow-amber-500/20 flex items-center gap-2 self-start"><Plus className="w-4 h-4" /> Create Notice</button>
+              </div>
+              <div className="bg-white border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm">
+                {noticesLoading ? (<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>) : notices.length === 0 ? (<div className="text-center py-20"><Megaphone className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400">No notices yet</p></div>) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead><tr className="border-b border-gray-200/60 bg-gray-50/50"><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Notice</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Category</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Priority</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Status</th><th className="text-left text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Expires</th><th className="text-right text-xs text-gray-500 font-medium px-6 py-4 uppercase tracking-wider">Actions</th> </tr></thead>
+                      <tbody>
+                        {notices.map((n) => (
+                          <tr key={n._id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
+                            <td className="px-6 py-4"><div className="flex items-center gap-3">{n.attachments?.[0] && n.attachments[0].match(/\.(jpeg|jpg|gif|png|webp)$/i) ? <img src={`http://localhost:5000${n.attachments[0]}`} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-100 shrink-0" /> : <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0"><Megaphone className="w-5 h-5 text-amber-300" /></div>}<div className="min-w-0"><p className="text-sm font-medium text-surface-dark truncate">{n.title}</p><p className="text-xs text-gray-400 truncate max-w-[200px]">{n.content}</p></div></div> </td>
+                            <td className="px-6 py-4"><span className="px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-200/60 rounded-lg text-xs font-medium capitalize">{n.category}</span> </td>
+                            <td className="px-6 py-4"><span className={`px-2.5 py-1 rounded-lg text-xs font-medium capitalize ${n.priority === 'high' ? 'bg-red-50 text-red-600 border border-red-200' : n.priority === 'medium' ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>{n.priority}</span> </td>
+                            <td className="px-6 py-4"><span className={`inline-flex items-center gap-1.5 text-xs ${n.isActive ? 'text-emerald-600' : 'text-gray-400'}`}><span className={`w-2 h-2 rounded-full ${n.isActive ? 'bg-emerald-500' : 'bg-gray-300'}`} />{n.isActive ? 'Active' : 'Expired'}</span> </td>
+                            <td className="px-6 py-4"><span className="text-sm text-gray-600">{formatDate(n.expiryDate)}</span> </td>
+                            <td className="px-6 py-4"><div className="flex items-center justify-end gap-1"><button onClick={() => openNoticeEdit(n)} className="p-2 text-gray-400 hover:text-amber-500 hover:bg-gray-100 rounded-lg transition-all"><Edit3 className="w-4 h-4" /></button><button onClick={() => { setSelectedNotice(n); setShowDeleteNotice(true); }} className="p-2 text-gray-400 hover:text-red-500 hover:bg-gray-100 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button></div> </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
+                {noticesTotalPages > 1 && (<div className="flex items-center justify-between px-6 py-4 border-t border-gray-200/60"><p className="text-sm text-gray-500">Page {noticesPage} of {noticesTotalPages}</p><div className="flex gap-2"><button onClick={() => setNoticesPage(p => Math.max(1, p - 1))} disabled={noticesPage === 1} className="p-2 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button><button onClick={() => setNoticesPage(p => Math.min(noticesTotalPages, p + 1))} disabled={noticesPage === noticesTotalPages} className="p-2 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button></div></div>)}
               </div>
             </>
           )}
         </main>
       </div>
 
-      {/* Create User Modal */}
+      {/* Create User Modal (your existing code) */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -887,12 +1033,6 @@ const AdminDashboard = () => {
               </button>
             </div>
             <form onSubmit={handleCreate} className="space-y-4">
-              {message.text && (
-                <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${message.type === 'success' ? 'bg-success-50 text-success-600' : 'bg-danger-50 text-danger-600'}`}>
-                  {message.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                  {message.text}
-                </div>
-              )}
               <div>
                 <label className="block text-sm text-gray-600 font-medium mb-1.5">
                   Student ID
@@ -905,18 +1045,6 @@ const AdminDashboard = () => {
                   }
                   className={inputClass}
                   placeholder="e.g. IT23543964"
-                  maxLength={10}
-                  minLength={10}
-                  onInvalid={(e) => {
-                    if (e.target.validity.tooShort || e.target.validity.patternMismatch) {
-                      e.target.setCustomValidity('ID should be exactly 10 characters');
-                    } else if (e.target.validity.valueMissing) {
-                      e.target.setCustomValidity('Please fill out this field.');
-                    }
-                  }}
-                  onInput={(e) => {
-                    e.target.setCustomValidity('');
-                  }}
                   required
                 />
               </div>
@@ -928,11 +1056,10 @@ const AdminDashboard = () => {
                   type="text"
                   value={createForm.fullName}
                   onChange={(e) =>
-                    setCreateForm({ ...createForm, fullName: e.target.value.replace(/[^a-zA-Z\s]/g, '') })
+                    setCreateForm({ ...createForm, fullName: e.target.value })
                   }
                   className={inputClass}
                   placeholder="John Doe"
-                  maxLength={30}
                   required
                 />
               </div>
@@ -1030,7 +1157,7 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Edit User Modal */}
+      {/* Edit User Modal (your existing code) */}
       {showEditModal && selectedUser && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1044,12 +1171,6 @@ const AdminDashboard = () => {
               </button>
             </div>
             <form onSubmit={handleEdit} className="space-y-4">
-              {message.text && (
-                <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${message.type === 'success' ? 'bg-success-50 text-success-600' : 'bg-danger-50 text-danger-600'}`}>
-                  {message.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                  {message.text}
-                </div>
-              )}
               <div>
                 <label className="block text-sm text-gray-600 font-medium mb-1.5">
                   Full Name
@@ -1058,10 +1179,9 @@ const AdminDashboard = () => {
                   type="text"
                   value={editForm.fullName}
                   onChange={(e) =>
-                    setEditForm({ ...editForm, fullName: e.target.value.replace(/[^a-zA-Z\s]/g, '') })
+                    setEditForm({ ...editForm, fullName: e.target.value })
                   }
                   className={inputClass}
-                  maxLength={30}
                   required
                 />
               </div>
@@ -1172,7 +1292,7 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Delete User Modal */}
+      {/* Delete User Modal (your existing code) */}
       {showDeleteModal && selectedUser && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
@@ -1210,7 +1330,227 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Create/Edit Notice Modal */}
+      {/* View Report Modal */}
+      {showReportViewModal && selectedReport && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Flag className="w-5 h-5 text-red-500" />
+                <h3 className="text-lg font-bold text-surface-dark">Report Details</h3>
+              </div>
+              <button
+                onClick={() => setShowReportViewModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase">Title</label>
+                <p className="text-surface-dark font-medium mt-1">{selectedReport.title}</p>
+              </div>
+              
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase">Description</label>
+                <p className="text-gray-600 mt-1 whitespace-pre-wrap">{selectedReport.description}</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Report Type</label>
+                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.reportType}</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Priority</label>
+                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.priority}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Status</label>
+                  <span className={`inline-flex mt-1 px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getStatusColor(selectedReport.status)}`}>
+                    {selectedReport.status?.replace('_', ' ')}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Reported By</label>
+                  <p className="text-surface-dark mt-1">
+                    {selectedReport.isAnonymous ? "Anonymous" : selectedReport.reportedBy?.name}
+                  </p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase">Reported Item</label>
+                <p className="text-surface-dark mt-1">
+                  {selectedReport.reportedItemModel}: {selectedReport.reportedItemId}
+                </p>
+              </div>
+              
+              {selectedReport.adminNotes && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Admin Notes</label>
+                  <p className="text-gray-600 mt-1 bg-gray-50 p-3 rounded-lg">{selectedReport.adminNotes}</p>
+                </div>
+              )}
+              
+              {selectedReport.resolution?.action && selectedReport.resolution.action !== 'none' && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Resolution Action</label>
+                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.resolution.action}</p>
+                </div>
+              )}
+              
+              <div>
+                <label className="text-xs font-medium text-gray-500 uppercase">Created At</label>
+                <p className="text-gray-500 text-sm mt-1">{new Date(selectedReport.createdAt).toLocaleString()}</p>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setShowReportViewModal(false);
+                  openReportStatusModal(selectedReport);
+                }}
+                className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition-all"
+              >
+                Update Status
+              </button>
+              <button
+                onClick={() => setShowReportViewModal(false)}
+                className="px-4 py-2 bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-200 transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Report Status Modal */}
+      {showReportStatusModal && selectedReport && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-surface-dark">Update Report Status</h3>
+              <button
+                onClick={() => setShowReportStatusModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Status</label>
+                <select
+                  value={reportStatusUpdate.status}
+                  onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, status: e.target.value })}
+                  className={selectClass}
+                >
+                  <option value="pending">Pending</option>
+                  <option value="under_review">Under Review</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="dismissed">Dismissed</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Admin Notes</label>
+                <textarea
+                  value={reportStatusUpdate.adminNotes}
+                  onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, adminNotes: e.target.value })}
+                  className={inputClass}
+                  rows={3}
+                  placeholder="Add notes about this report..."
+                />
+              </div>
+              
+              {reportStatusUpdate.status === 'resolved' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1.5">Resolution Action</label>
+                  <select
+                    value={reportStatusUpdate.resolutionAction}
+                    onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, resolutionAction: e.target.value })}
+                    className={selectClass}
+                  >
+                    <option value="none">No Action</option>
+                    <option value="warning">Warning Issued</option>
+                    <option value="removed">Content Removed</option>
+                    <option value="banned">User Banned</option>
+                    <option value="restricted">User Restricted</option>
+                  </select>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowReportStatusModal(false)}
+                className="flex-1 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-200 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReportStatusUpdate}
+                disabled={reportStatusLoading}
+                className="flex-1 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl text-sm font-medium text-white hover:from-primary-600 hover:to-accent-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {reportStatusLoading ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Update
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Report Modal */}
+      {showReportDeleteModal && selectedReport && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-lg font-bold text-center text-surface-dark mb-2">
+              Delete Report?
+            </h3>
+            <p className="text-sm text-gray-500 text-center mb-2">
+              Are you sure you want to delete this report?
+            </p>
+            <p className="text-xs text-gray-400 text-center mb-6">
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowReportDeleteModal(false)}
+                className="flex-1 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-200 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReportDelete}
+                className="flex-1 py-2.5 bg-red-500 text-white rounded-xl text-sm font-medium hover:bg-red-600 transition-all"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create/Edit Notice Modal (your existing code) */}
       {showNoticeModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-xl w-full shadow-2xl max-h-[92vh] overflow-y-auto">
@@ -1292,7 +1632,7 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Delete Notice Modal */}
+      {/* Delete Notice Modal (your existing code) */}
       {showDeleteNotice && selectedNotice && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl">

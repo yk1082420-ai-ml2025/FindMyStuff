@@ -1,17 +1,145 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Menu, X, Search, LogOut, User, LayoutDashboard, MessageCircle } from 'lucide-react';
+import { useNotifications } from '../context/NotificationContext';
+import { Menu, X, Search, LogOut, LayoutDashboard, Bell, FileText, MessageCircle, CheckCheck } from 'lucide-react';
+
+const formatTimeAgo = (date) => {
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+};
+
+const NotificationDropdown = ({ notifications, unreadCount, onNotifClick, onMarkAllRead }) => (
+    <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-32px)] bg-white border border-gray-200/60 rounded-2xl shadow-2xl shadow-gray-200/50 overflow-hidden z-50">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-primary-500" />
+                <span className="text-sm font-semibold text-surface-dark">Notifications</span>
+                {unreadCount > 0 && (
+                    <span className="bg-primary-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                        {unreadCount}
+                    </span>
+                )}
+            </div>
+            {unreadCount > 0 && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onMarkAllRead(); }}
+                    className="text-xs text-primary-500 hover:text-primary-600 font-medium flex items-center gap-1 transition-colors"
+                >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    Mark all read
+                </button>
+            )}
+        </div>
+
+        {/* Notification list */}
+        <div className="max-h-[360px] overflow-y-auto">
+            {notifications.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4">
+                    <Bell className="w-10 h-10 text-gray-200 mb-2" />
+                    <p className="text-sm text-gray-400 font-medium">No notifications yet</p>
+                    <p className="text-xs text-gray-300 mt-0.5">We&apos;ll notify you when something happens</p>
+                </div>
+            ) : (
+                notifications.map((notif) => (
+                    <button
+                        key={notif._id}
+                        onClick={() => onNotifClick(notif)}
+                        className={`w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-all border-b border-gray-50 last:border-b-0 ${
+                            !notif.isRead ? 'bg-primary-50/30' : ''
+                        }`}
+                    >
+                        {/* Icon */}
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                            notif.type === 'claim'
+                                ? 'bg-amber-50 text-amber-500'
+                                : 'bg-blue-50 text-blue-500'
+                        }`}>
+                            {notif.type === 'claim'
+                                ? <FileText className="w-4 h-4" />
+                                : <MessageCircle className="w-4 h-4" />
+                            }
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                            <p className={`text-sm leading-snug ${!notif.isRead ? 'font-semibold text-surface-dark' : 'text-gray-600'}`}>
+                                {notif.title}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5 truncate">{notif.message}</p>
+                            <p className="text-[10px] text-gray-300 mt-1 font-medium uppercase tracking-wider">
+                                {formatTimeAgo(notif.createdAt)}
+                            </p>
+                        </div>
+
+                        {/* Unread dot */}
+                        {!notif.isRead && (
+                            <div className="w-2.5 h-2.5 rounded-full bg-primary-500 shrink-0 mt-2 ring-2 ring-primary-500/20" />
+                        )}
+                    </button>
+                ))
+            )}
+        </div>
+    </div>
+);
 
 const Navbar = () => {
     const { user, logout } = useAuth();
+    const { unreadCount, notifications, markAsRead, markAllAsRead, fetchNotifications } = useNotifications();
     const navigate = useNavigate();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [notifOpen, setNotifOpen] = useState(false);
+    const desktopNotifRef = useRef(null);
+    const mobileNotifRef = useRef(null);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            const clickedDesktop = desktopNotifRef.current && desktopNotifRef.current.contains(e.target);
+            const clickedMobile = mobileNotifRef.current && mobileNotifRef.current.contains(e.target);
+            
+            if (!clickedDesktop && !clickedMobile) {
+                setNotifOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleLogout = () => {
         logout();
         navigate('/');
         setMobileOpen(false);
+    };
+
+    const handleNotifClick = async (notif) => {
+        if (!notif.isRead) {
+            await markAsRead(notif._id);
+        }
+        setNotifOpen(false);
+        setMobileOpen(false);
+
+        const dashPath = user?.role === 'admin' ? '/admin' : '/dashboard';
+
+        if (notif.type === 'claim') {
+            navigate(dashPath, { state: { tab: 'claims', _ts: Date.now() }, replace: false });
+        } else if (notif.type === 'message') {
+            navigate(dashPath, { state: { tab: 'messages', chatId: notif.relatedId, _ts: Date.now() }, replace: false });
+        }
+    };
+
+    const handleBellClick = () => {
+        if (!notifOpen) {
+            fetchNotifications();
+        }
+        setNotifOpen(!notifOpen);
     };
 
     return (
@@ -66,6 +194,31 @@ const Navbar = () => {
                                 </Link>
                                
                                 <div className="flex items-center gap-3 ml-4 pl-4 border-l border-gray-200">
+                                    {/* Notification bell */}
+                                    <div className="relative" ref={desktopNotifRef}>
+                                        <button
+                                            onClick={handleBellClick}
+                                            className="relative p-2 text-gray-400 hover:text-surface-dark rounded-lg hover:bg-gray-100 transition-all"
+                                            title="Notifications"
+                                            id="notification-bell"
+                                        >
+                                            <Bell className="w-5 h-5" />
+                                            {unreadCount > 0 && (
+                                                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1 ring-2 ring-white animate-pulse">
+                                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                                </span>
+                                            )}
+                                        </button>
+                                        {notifOpen && (
+                                            <NotificationDropdown
+                                                notifications={notifications}
+                                                unreadCount={unreadCount}
+                                                onNotifClick={handleNotifClick}
+                                                onMarkAllRead={markAllAsRead}
+                                            />
+                                        )}
+                                    </div>
+
                                     <div className="flex items-center gap-2">
                                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-sm font-semibold text-white">
                                             {user.fullName?.charAt(0)?.toUpperCase() || 'U'}
@@ -99,13 +252,38 @@ const Navbar = () => {
                         )}
                     </div>
 
-                    {/* Mobile menu button */}
-                    <button
-                        onClick={() => setMobileOpen(!mobileOpen)}
-                        className="md:hidden p-2 text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100"
-                    >
-                        {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                    </button>
+                    {/* Mobile: bell + hamburger */}
+                    <div className="flex items-center gap-2 md:hidden">
+                        {user && (
+                            <div className="relative" ref={!mobileOpen ? mobileNotifRef : undefined}>
+                                <button
+                                    onClick={handleBellClick}
+                                    className="relative p-2 text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100"
+                                >
+                                    <Bell className="w-5 h-5" />
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1 ring-2 ring-white animate-pulse">
+                                            {unreadCount > 99 ? '99+' : unreadCount}
+                                        </span>
+                                    )}
+                                </button>
+                                {notifOpen && (
+                                    <NotificationDropdown
+                                        notifications={notifications}
+                                        unreadCount={unreadCount}
+                                        onNotifClick={handleNotifClick}
+                                        onMarkAllRead={markAllAsRead}
+                                    />
+                                )}
+                            </div>
+                        )}
+                        <button
+                            onClick={() => setMobileOpen(!mobileOpen)}
+                            className="p-2 text-gray-600 hover:text-surface-dark rounded-lg hover:bg-gray-100"
+                        >
+                            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                        </button>
+                    </div>
                 </div>
             </div>
 
