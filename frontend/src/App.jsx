@@ -12,6 +12,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import LostItems from './pages/LostItems';
 import FoundItems from './pages/FoundItems';
 import Notices from './pages/Notices';
+import ChatBot from './pages/ChatBot';
 
 const AuthRedirect = ({ children }) => {
   const { user } = useAuth();
@@ -24,16 +25,16 @@ const AuthRedirect = ({ children }) => {
 // SocketInitializer component
 const SocketInitializer = ({ children }) => {
   const { user } = useAuth();
-  
+
   useEffect(() => {
     let socket = null;
-    
+
     if (user?._id) {
       console.log('🟡 App: Initializing socket for user:', user._id);
       socket = initializeSocket(user._id);
       console.log('🟢 App: Socket after init:', socket?.id);
     }
-    
+
     return () => {
       if (user?._id) {
         console.log('🔴 App: Disconnecting socket for user:', user._id);
@@ -41,7 +42,7 @@ const SocketInitializer = ({ children }) => {
       }
     };
   }, [user]);
-  
+
   return children;
 };
 
@@ -61,8 +62,10 @@ function App() {
             <Route path="/lost" element={<LostItems />} />
             <Route path="/found-items" element={<FoundItems />} />
             <Route path="/notices" element={<Notices />} />
+            <Route path="/chatbot" element={<ChatBot />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <ChatBot />
         </SocketInitializer>
       </Router>
     </AuthProvider>
