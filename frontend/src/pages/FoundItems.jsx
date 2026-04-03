@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import API from '../api/axios';
 import ClaimPanel from '../components/claims/ClaimPanel';
@@ -622,6 +622,30 @@ const FoundItems = () => {
         fetchItems();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, search, category, location, color, brand, dateFrom, dateTo]);
+
+    // Handle deep-link to open a specific item from Dashboard claims
+    const locationObj = useLocation();
+    useEffect(() => {
+        const handleDeepLink = async () => {
+            if (locationObj.state?.openItem) {
+                setSelectedItem(locationObj.state.openItem);
+                setShowDetail(true);
+                window.history.replaceState({}, '');
+            } else if (locationObj.state?.openItemId) {
+                const itemId = locationObj.state.openItemId;
+                try {
+                    const { data } = await API.get(`/found/${itemId}`);
+                    setSelectedItem(data);
+                    setShowDetail(true);
+                } catch (error) {
+                    console.error('Failed to fetch item for deep-link:', error);
+                    showToast('Failed to load item details', 'error');
+                }
+                window.history.replaceState({}, '');
+            }
+        };
+        handleDeepLink();
+    }, [locationObj.state]);
 
     const showToast = (text, type = 'success') => {
         setToast({ text, type });

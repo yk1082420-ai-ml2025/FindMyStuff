@@ -375,7 +375,7 @@ const NoticeFormModal = ({ open, onClose, initial, onSuccess }) => {
 
 // ─── Detail Modal ────────────────────────────────────────────────────────────
 
-const DetailModal = ({ open, onClose, initial, onEdit, onArchive, currentUser }) => {
+const DetailModal = ({ open, onClose, initial }) => {
     const [activeImage, setActiveImage] = useState(0);
 
     useEffect(() => {
@@ -387,8 +387,6 @@ const DetailModal = ({ open, onClose, initial, onEdit, onArchive, currentUser })
 
     const item = initial;
     if (!open || !item) return null;
-
-    const isAdmin = currentUser?.role === 'admin';
 
     // Only render image thumbs if they are potentially images
     const imageAttachments = (item.attachments || []).filter(att => att.match(/\.(jpeg|jpg|gif|png|webp)$/i));
@@ -572,22 +570,9 @@ const Notices = () => {
         setTimeout(() => setToast({ text: '', type: '' }), 3500);
     };
 
-    const handleFormSuccess = () => {
-        setShowCreate(false);
-        setEditMode(false);
-        setSelectedItem(null);
-        setShowDetail(false);
-        fetchItems();
-        showToast(editMode ? 'Notice updated successfully!' : 'Notice broadcasted successfully!');
-    };
-
     const handleView = (item) => {
         setSelectedItem(item);
         setShowDetail(true);
-    };
-
-    const handleDeleteConfirm = async () => {
-        // kept only for admin detail modal backward compat
     };
 
     const resetFilters = () => {
@@ -764,9 +749,6 @@ const Notices = () => {
                 open={showDetail}
                 initial={selectedItem}
                 onClose={() => { setShowDetail(false); setSelectedItem(null); }}
-                onEdit={() => {}}
-                onArchive={() => {}}
-                currentUser={user}
             />
         </div>
     );

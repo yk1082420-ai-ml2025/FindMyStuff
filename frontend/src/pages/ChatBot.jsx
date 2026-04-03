@@ -85,6 +85,7 @@ export default function ChatBot() {
   const [activeFlow, setActiveFlow] = useState(null);
   const bottomRef = useRef(null);
 
+  const push = (msg) => setMessages((prev) => [...prev, msg]);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -102,9 +103,7 @@ export default function ChatBot() {
       return () => clearTimeout(t2);
     }, 300);
     return () => clearTimeout(t1);
-  }, [open]);
-
-  const push = (msg) => setMessages((prev) => [...prev, msg]);
+  }, [open, messages.length]);
 
   const showMainMenu = (name) => {
     const n = name || userName;

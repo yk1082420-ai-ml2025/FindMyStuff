@@ -1,6 +1,7 @@
 const Message = require('../models/Message');
 const Chat = require('../models/Chat');
 const mongoose = require('mongoose');
+const Notification = require('../models/Notification');
 // @desc    Send a message
 // @route   POST /api/messages
 // @access  Private
@@ -59,6 +60,34 @@ exports.sendMessage = async (req, res) => {
         const io = req.app.get('io');
         if (io) {
             io.to(chatId).emit('message_received', populated);
+        }
+
+        // Create notifications for other participants (throttled: one per chat)
+        const senderName = req.user.fullName || 'Someone';
+        for (const pId of chat.participants) {
+            if (pId.toString() === req.user._id.toString()) continue;
+
+            // Only create if there's no existing unread message notification for this chat
+            const existing = await Notification.findOne({
+                recipient: pId,
+                type: 'message',
+                relatedId: chat._id,
+                isRead: false
+            });
+
+            if (!existing) {
+                const notification = await Notification.create({
+                    recipient: pId,
+                    type: 'message',
+                    title: 'New Message',
+                    message: `${senderName}: ${content.trim().substring(0, 80)}`,
+                    relatedId: chat._id
+                });
+
+                if (io) {
+                    io.to(pId.toString()).emit('new_notification', notification);
+                }
+            }
         }
 
         res.status(201).json({ success: true, data: populated });

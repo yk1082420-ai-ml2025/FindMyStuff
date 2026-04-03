@@ -26,6 +26,21 @@ const Register = () => {
             return;
         }
 
+        if (form.studentId.length !== 10) {
+            setError('ID should be exactly 10 characters');
+            return;
+        }
+
+        if (form.fullName.length > 30) {
+            setError('Full Name must be 30 characters or less');
+            return;
+        }
+
+        if (!/^[a-zA-Z\s]+$/.test(form.fullName)) {
+            setError('Full Name must only contain English letters and spaces');
+            return;
+        }
+
         setLoading(true);
         try {
             await register({
@@ -49,6 +64,9 @@ const Register = () => {
             icon: <IdCard className="w-5 h-5" />,
             type: 'text',
             placeholder: 'e.g. IT23543964',
+            maxLength: 10,
+            minLength: 10,
+            customErrorMessage: 'ID should be exactly 10 characters',
         },
         {
             name: 'fullName',
@@ -56,6 +74,7 @@ const Register = () => {
             icon: <User className="w-5 h-5" />,
             type: 'text',
             placeholder: 'Pasindu Nirmal',
+            maxLength: 30,
         },
         {
             name: 'email',
@@ -113,11 +132,27 @@ const Register = () => {
                                     <input
                                         type={f.type}
                                         value={form[f.name]}
-                                        onChange={(e) =>
-                                            setForm({ ...form, [f.name]: e.target.value })
-                                        }
+                                        onChange={(e) => {
+                                            let val = e.target.value;
+                                            if (f.name === 'fullName') {
+                                                val = val.replace(/[^a-zA-Z\s]/g, '');
+                                            }
+                                            setForm({ ...form, [f.name]: val });
+                                        }}
                                         className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-surface-dark placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 focus:bg-white transition-all"
                                         placeholder={f.placeholder}
+                                        maxLength={f.maxLength}
+                                        minLength={f.minLength}
+                                        onInvalid={(e) => {
+                                            if (f.customErrorMessage && (e.target.validity.tooShort || e.target.validity.patternMismatch)) {
+                                                e.target.setCustomValidity(f.customErrorMessage);
+                                            } else if (e.target.validity.valueMissing) {
+                                                e.target.setCustomValidity('Please fill out this field.');
+                                            }
+                                        }}
+                                        onInput={(e) => {
+                                            e.target.setCustomValidity('');
+                                        }}
                                         required
                                     />
                                 </div>
@@ -135,9 +170,10 @@ const Register = () => {
                                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                                     className="w-full pl-11 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-surface-dark placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 focus:bg-white transition-all"
                                     placeholder="Min. 6 characters"
-                                    required
-                                    minLength={6}
-                                />
+                                        required
+                                        minLength={6}
+                                        maxLength={100}
+                                    />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
@@ -169,6 +205,7 @@ const Register = () => {
                                     placeholder="Repeat password"
                                     required
                                     minLength={6}
+                                    maxLength={100}
                                 />
                             </div>
                         </div>
