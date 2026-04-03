@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['claim', 'message'],
+        enum: ['claim', 'message', 'match'],
         required: true
     },
     title: {
@@ -37,6 +37,10 @@ const notificationSchema = new mongoose.Schema({
     isRead: {
         type: Boolean,
         default: false
+    },
+    link: {
+        type: String,
+        default: null
     }
 }, { timestamps: true });
 

@@ -69,6 +69,8 @@ app.use('/api/notices', require('./routes/noticeRoutes'));
 app.use('/api/reports', reportRoutes);
 app.use('/api/chat', chatbotRoutes);
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/matches', require('./routes/matchRoutes'));
+
 
 // Health chec
 app.get('/api/health', (req, res) => {

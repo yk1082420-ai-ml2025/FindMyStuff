@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { Menu, X, Search, LogOut, LayoutDashboard, Bell, FileText, MessageCircle, CheckCheck } from 'lucide-react';
+import { Menu, X, Search, LogOut, LayoutDashboard, Bell, FileText, MessageCircle, CheckCheck, GitMerge } from 'lucide-react';
 
 const formatTimeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -60,11 +60,15 @@ const NotificationDropdown = ({ notifications, unreadCount, onNotifClick, onMark
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
                             notif.type === 'claim'
                                 ? 'bg-amber-50 text-amber-500'
-                                : 'bg-blue-50 text-blue-500'
+                                : notif.type === 'match'
+                                    ? 'bg-violet-50 text-violet-500'
+                                    : 'bg-blue-50 text-blue-500'
                         }`}>
                             {notif.type === 'claim'
                                 ? <FileText className="w-4 h-4" />
-                                : <MessageCircle className="w-4 h-4" />
+                                : notif.type === 'match'
+                                    ? <GitMerge className="w-4 h-4" />
+                                    : <MessageCircle className="w-4 h-4" />
                             }
                         </div>
 
@@ -132,6 +136,13 @@ const Navbar = () => {
             navigate(dashPath, { state: { tab: 'claims', _ts: Date.now() }, replace: false });
         } else if (notif.type === 'message') {
             navigate(dashPath, { state: { tab: 'messages', chatId: notif.relatedId, _ts: Date.now() }, replace: false });
+        } else if (notif.type === 'match') {
+            // Navigate to the relevant post page so the user can view the match
+            if (notif.itemType === 'found') {
+                navigate('/found-items', { state: { openItemId: notif.itemId } });
+            } else if (notif.itemType === 'lost') {
+                navigate('/lost', { state: { openItemId: notif.itemId } });
+            }
         }
     };
 

@@ -30,7 +30,11 @@ import {
   Eye,
   Check,
   XCircle,
-  Clock as ClockIcon
+  Clock as ClockIcon,
+  GitMerge,
+  Zap,
+  ArrowLeftRight,
+  Package,
 } from "lucide-react";
 
 const AdminDashboard = () => {
@@ -89,6 +93,14 @@ const AdminDashboard = () => {
   });
   const [reportStatusLoading, setReportStatusLoading] = useState(false);
 
+  // ─── Matching state ─────────────────────────────────────────────
+  const [matches, setMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchRunning, setMatchRunning] = useState(false);
+  const [matchStats, setMatchStats] = useState({ pending: 0, confirmed: 0, dismissed: 0 });
+  const [matchStatusFilter, setMatchStatusFilter] = useState('pending');
+  const [matchActionLoading, setMatchActionLoading] = useState(null); // stores match _id being processed
+
   // ─── Notices state ─────────────────────────────────────────
   const CATEGORIES = ['alert', 'event', 'general', 'tips'];
   const PRIORITIES = ['low', 'medium', 'high'];
@@ -143,6 +155,14 @@ const AdminDashboard = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, reportsPage, reportStatusFilter, reportTypeFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'matching') {
+      fetchMatches();
+      fetchMatchStats();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, matchStatusFilter]);
 
   // ─── Reports functions ─────────────────────────────────────────
   const fetchReports = async () => {
@@ -250,6 +270,73 @@ const AdminDashboard = () => {
       other: "bg-gray-50 text-gray-600 border-gray-200"
     };
     return colors[reason] || colors.other;
+  };
+
+  // ─── Matching functions ─────────────────────────────────────────────────────
+  const fetchMatches = async () => {
+    setMatchesLoading(true);
+    try {
+      const { data } = await API.get(`/matches?status=${matchStatusFilter}`);
+      setMatches(data.data || []);
+    } catch (error) {
+      console.error('Failed to fetch matches', error);
+    } finally {
+      setMatchesLoading(false);
+    }
+  };
+
+  const fetchMatchStats = async () => {
+    try {
+      const { data } = await API.get('/matches/stats');
+      setMatchStats(data.data || { pending: 0, confirmed: 0, dismissed: 0 });
+    } catch (error) {
+      console.error('Failed to fetch match stats', error);
+    }
+  };
+
+  const handleRunMatching = async () => {
+    setMatchRunning(true);
+    try {
+      const { data } = await API.post('/matches/run');
+      setMessage({ text: data.message, type: 'success' });
+      setTimeout(() => setMessage({ text: '', type: '' }), 4000);
+      fetchMatches();
+      fetchMatchStats();
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || 'Matching failed', type: 'error' });
+    } finally {
+      setMatchRunning(false);
+    }
+  };
+
+  const handleConfirmMatch = async (matchId) => {
+    setMatchActionLoading(matchId);
+    try {
+      await API.post(`/matches/${matchId}/confirm`);
+      setMessage({ text: 'Match confirmed! Both users have been notified.', type: 'success' });
+      setTimeout(() => setMessage({ text: '', type: '' }), 4000);
+      fetchMatches();
+      fetchMatchStats();
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || 'Failed to confirm match', type: 'error' });
+    } finally {
+      setMatchActionLoading(null);
+    }
+  };
+
+  const handleDismissMatch = async (matchId) => {
+    setMatchActionLoading(matchId);
+    try {
+      await API.post(`/matches/${matchId}/dismiss`);
+      setMessage({ text: 'Match dismissed.', type: 'success' });
+      setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+      fetchMatches();
+      fetchMatchStats();
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || 'Failed to dismiss match', type: 'error' });
+    } finally {
+      setMatchActionLoading(null);
+    }
   };
 
   // ─── Notices functions (your existing code) ─────────────────────────
@@ -483,14 +570,11 @@ const AdminDashboard = () => {
   };
 
   const sidebarItems = [
-    {
-      id: "overview",
-      label: "Overview",
-      icon: <LayoutDashboard className="w-5 h-5" />,
-    },
+    { id: "overview", label: "Overview", icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: "users", label: "Users", icon: <Users className="w-5 h-5" /> },
     { id: "reports", label: "Reports", icon: <Flag className="w-5 h-5" /> },
     { id: "notices", label: "Notices", icon: <Megaphone className="w-5 h-5" /> },
+    { id: "matching", label: "Matching Posts", icon: <GitMerge className="w-5 h-5" /> },
   ];
 
   const statCards = [
@@ -982,8 +1066,220 @@ const AdminDashboard = () => {
             </>
           )}
 
+          {/* Matching Posts Tab */}
+          {activeTab === "matching" && (
+            <>
+              {/* Header row */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h1 className="text-2xl font-bold text-surface-dark flex items-center gap-2">
+                    <GitMerge className="w-6 h-6 text-violet-500" /> Matching Posts
+                  </h1>
+                  <p className="text-gray-500 text-sm mt-1">
+                    Automatically detect and review potential lost ↔ found matches
+                  </p>
+                </div>
+                <button
+                  onClick={handleRunMatching}
+                  disabled={matchRunning}
+                  className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-medium text-sm hover:from-violet-600 hover:to-purple-700 transition-all shadow-md shadow-violet-500/20 flex items-center gap-2 self-start disabled:opacity-60"
+                >
+                  {matchRunning
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Zap className="w-4 h-4" />}
+                  {matchRunning ? 'Scanning...' : 'Run Matching'}
+                </button>
+              </div>
+
+              {/* Stat cards */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {[
+                  { label: 'Pending Review', value: matchStats.pending, bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
+                  { label: 'Confirmed', value: matchStats.confirmed, bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' },
+                  { label: 'Dismissed', value: matchStats.dismissed, bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200' },
+                ].map((s) => (
+                  <div key={s.label} className={`p-5 bg-white border ${s.border} rounded-2xl`}>
+                    <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-3xl font-bold ${s.text}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Status filter tabs */}
+              <div className="flex gap-2 mb-5">
+                {['pending', 'confirmed', 'dismissed'].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setMatchStatusFilter(s)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium capitalize transition-all border ${matchStatusFilter === s
+                      ? 'bg-violet-500 text-white border-violet-500 shadow-sm'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-violet-300 hover:text-violet-600'}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              {/* Match list */}
+              {matchesLoading ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="w-10 h-10 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : matches.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 bg-white border border-gray-200 rounded-2xl">
+                  <GitMerge className="w-14 h-14 text-gray-200 mb-4" />
+                  <p className="text-gray-400 font-medium">No {matchStatusFilter} matches</p>
+                  <p className="text-xs text-gray-400 mt-1">Click "Run Matching" to scan for potential pairs</p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {matches.map((match, idx) => {
+                    const lost = match.lostItem;
+                    const found = match.foundItem;
+                    const isActing = matchActionLoading === match._id;
+                    const scoreLabel = `${match.score}/4`;
+                    const confidencePct = Math.round((match.score / 4) * 100);
+                    const confidenceColor = match.score === 4
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                      : 'bg-amber-100 text-amber-700 border-amber-300';
+
+                    return (
+                      <div key={match._id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        {/* Top bar */}
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-gray-700">Match #{String(idx + 1).padStart(4, '0')}</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${confidenceColor}`}>
+                              {scoreLabel} · {confidencePct}% Confidence
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">{new Date(match.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+
+                        {/* Side-by-side posts */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                          {/* LOST POST */}
+                          <div className="p-5">
+                            <div className="flex items-center gap-1.5 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-red-500" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-red-500">Lost Post</span>
+                            </div>
+                            <div className="flex items-start gap-3 mb-4">
+                              {lost?.images?.[0] ? (
+                                <img src={`http://localhost:5000${lost.images[0]}`} alt={lost?.title}
+                                  className="w-14 h-14 rounded-xl object-cover border border-gray-100 shrink-0" />
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                                  <Package className="w-6 h-6 text-red-200" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-gray-800 truncate">{lost?.title || '—'}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">by {lost?.postedBy?.fullName || 'Unknown'} · {lost?.postedBy?.studentId || ''}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1 text-xs text-gray-500">
+                              <p><span className="font-medium text-gray-600">Category:</span> {lost?.category || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Location:</span> {lost?.lastSeenLocation || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Date Lost:</span> {lost?.dateLost ? new Date(lost.dateLost).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                              {lost?.color && <p><span className="font-medium text-gray-600">Color:</span> {lost.color}</p>}
+                              {lost?.brand && <p><span className="font-medium text-gray-600">Brand:</span> {lost.brand}</p>}
+                            </div>
+                          </div>
+
+                          {/* FOUND POST */}
+                          <div className="p-5 relative">
+                            {/* Swap icon in centre on md+ */}
+                            <div className="hidden md:flex absolute -left-5 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-violet-500 text-white items-center justify-center shadow-lg shadow-violet-500/30">
+                              <ArrowLeftRight className="w-4 h-4" />
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Found Post</span>
+                            </div>
+                            <div className="flex items-start gap-3 mb-4">
+                              {found?.images?.[0] ? (
+                                <img src={`http://localhost:5000${found.images[0]}`} alt={found?.title}
+                                  className="w-14 h-14 rounded-xl object-cover border border-gray-100 shrink-0" />
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                                  <Package className="w-6 h-6 text-emerald-200" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-gray-800 truncate">{found?.title || '—'}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">by {found?.postedBy?.fullName || 'Unknown'} · {found?.postedBy?.studentId || ''}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1 text-xs text-gray-500">
+                              <p><span className="font-medium text-gray-600">Category:</span> {found?.category || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Location:</span> {found?.foundLocation || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Date Found:</span> {found?.dateFound ? new Date(found.dateFound).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                              {found?.color && <p><span className="font-medium text-gray-600">Color:</span> {found.color}</p>}
+                              {found?.brand && <p><span className="font-medium text-gray-600">Brand:</span> {found.brand}</p>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Matched On tags + Actions */}
+                        <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50/40">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            {/* Matched on tags */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Matched on:</span>
+                              {match.matchedOn?.map((attr) => (
+                                <span key={attr} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-xs font-medium">
+                                  <Check className="w-3 h-3" /> {attr}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Actions */}
+                            {matchStatusFilter === 'pending' && (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={() => handleConfirmMatch(match._id)}
+                                  disabled={isActing}
+                                  className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm shadow-emerald-500/20 disabled:opacity-60"
+                                >
+                                  {isActing ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                  Confirm Match &amp; Notify Both
+                                </button>
+                                <button
+                                  onClick={() => handleDismissMatch(match._id)}
+                                  disabled={isActing}
+                                  className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                >
+                                  <X className="w-3.5 h-3.5" /> Dismiss
+                                </button>
+                              </div>
+                            )}
+                            {matchStatusFilter === 'confirmed' && (
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+                                <CheckCircle className="w-3.5 h-3.5" /> Confirmed — Both users notified
+                              </span>
+                            )}
+                            {matchStatusFilter === 'dismissed' && (
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-full">
+                                <XCircle className="w-3.5 h-3.5" /> Dismissed
+                              </span>
+                            )}
+                          </div>
+                          {matchStatusFilter === 'pending' && (
+                            <p className="text-[10px] text-gray-400 mt-2">Admin review required before notification is sent</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
           {/* Notices Tab */}
           {activeTab === "notices" && (
+
             <>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div><h1 className="text-2xl font-bold text-surface-dark">Notice Management</h1><p className="text-gray-500 text-sm mt-1">{noticesTotalItems} total notices</p></div>
@@ -1647,6 +1943,8 @@ const AdminDashboard = () => {
       )}
     </div>
   );
+
+  // ─── Matching Posts Tab is inserted above in the JSX ─────────────────────────
 };
 
 export default AdminDashboard;
