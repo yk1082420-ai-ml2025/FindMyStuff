@@ -37,8 +37,7 @@ const Leaderboard = () => {
     };
 
     const filteredUsers = users.filter(user =>
-        user.fullName?.toLowerCase().includes(search.toLowerCase()) ||
-        user.faculty?.toLowerCase().includes(search.toLowerCase())
+        user.fullName?.toLowerCase().includes(search.toLowerCase())
     );
 
     // Helper to get rank icon/display
@@ -91,7 +90,7 @@ const Leaderboard = () => {
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder="Search by name or faculty..."
+                                placeholder="Search by name..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm w-64 focus:outline-none focus:border-primary-500"
@@ -132,22 +131,21 @@ const Leaderboard = () => {
                             <table className="w-full">
                                 <thead className="bg-gray-50 border-b border-gray-200">
                                     <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Rank</th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Rank</th>
                                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Student</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Faculty</th>
-                                        <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
                                             {filter === 'monthly' ? 'Monthly Points' : 'Total Points'}
                                         </th>
-                                        <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Returns</th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Returns</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {filteredUsers.map((user) => (
                                         <tr key={user._id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="px-6 py-4 whitespace-nowrap text-center">
                                                 {getRankDisplay(user.rank)}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="px-6 py-4 whitespace-nowrap text-left">
                                                 <div className="flex items-center gap-3">
                                                     {user.profilePhoto ? (
                                                         <img
@@ -163,13 +161,10 @@ const Leaderboard = () => {
                                                     <span className="font-medium text-gray-800">{user.fullName}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                                                {user.faculty || '—'}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right font-bold text-primary-600">
+                                            <td className="px-6 py-4 whitespace-nowrap text-center font-bold text-primary-600">
                                                 {filter === 'monthly' ? user.monthlyPoints : user.points}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-gray-600">
+                                            <td className="px-6 py-4 whitespace-nowrap text-center text-gray-600">
                                                 {user.successfulReturns || 0}
                                             </td>
                                         </tr>

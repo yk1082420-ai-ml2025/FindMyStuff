@@ -15,8 +15,7 @@ exports.getMyChats = async (req, res) => {
         // Enrich each chat with item details
         const enriched = await Promise.all(chats.map(async (chat) => {
             const ItemModel = chat.itemType === 'found' ? FoundItem : LostItem;
-            // Use findOne with the custom code field instead of findById
-            const item = await ItemModel.findOne({ itemCode: chat.itemId })
+            const item = await ItemModel.findById(chat.itemId)
                 .select('title images status postedBy');
             const otherUser = chat.participants.find(p => p._id.toString() !== req.user._id.toString());
             return {
@@ -60,8 +59,7 @@ exports.getChatById = async (req, res) => {
         }
 
         const ItemModel = chat.itemType === 'found' ? FoundItem : LostItem;
-        // Use findOne with the custom code field instead of findById
-        const item = await ItemModel.findOne({ itemCode: chat.itemId })
+        const item = await ItemModel.findById(chat.itemId)
             .select('title images status postedBy');
         const otherUser = chat.participants.find(p => p._id.toString() !== req.user._id.toString());
 

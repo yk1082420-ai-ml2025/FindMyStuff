@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const Claim = require('../models/Claim');
-// const Notification = require('../models/Notification'); // Uncomment when ready
+const Notification = require('../models/Notification');
 
 const POINTS_PER_RETURN = 10;
 
@@ -13,17 +13,32 @@ const awardPointsForReturn = async (claimId, ownerId, finderId) => {
         if (!claim) return { success: false, message: 'Claim not found' };
         if (claim.pointsAwarded) return { success: false, message: 'Points already awarded' };
 
-        await User.findByIdAndUpdate(ownerId, {
-            $inc: { points: POINTS_PER_RETURN, monthlyPoints: POINTS_PER_RETURN, successfulReturns: 1 }
-        });
-        await User.findByIdAndUpdate(finderId, {
+        let actualFinderId;
+        if (claim.itemType === 'found') {
+            // In a 'found' post, the post creator is the finder
+            actualFinderId = ownerId; 
+        } else {
+            // In a 'lost' post, the claimant is the finder
+            actualFinderId = finderId;
+        }
+
+        await User.findByIdAndUpdate(actualFinderId, {
             $inc: { points: POINTS_PER_RETURN, monthlyPoints: POINTS_PER_RETURN, successfulReturns: 1 }
         });
 
         claim.pointsAwarded = true;
         await claim.save();
 
-        return { success: true };
+        const finderNotification = await Notification.create({
+            recipient: actualFinderId,
+            type: 'system',
+            title: 'Points Awarded!',
+            message: `You have been awarded ${POINTS_PER_RETURN} points for a successful return!`,
+            relatedId: claimId,
+            relatedModel: 'Claim'
+        });
+
+        return { success: true, notifications: [finderNotification] };
     } catch (error) {
         return { success: false, message: error.message };
     }

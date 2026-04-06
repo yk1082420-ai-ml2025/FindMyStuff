@@ -243,9 +243,9 @@ const FoundItemFormModal = ({ open, onClose, initial, onSuccess }) => {
             files.forEach(f => formData.append('images', f));
 
             if (isEdit) {
-                await API.put(`/api/found/${initial._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await API.put(`/found/${initial._id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             } else {
-                await API.post('/api/found', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await API.post('/found', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
             }
             onSuccess();
         } catch (err) {
@@ -566,7 +566,7 @@ const FoundItems = () => {
 
     const fetchSuggestions = async (q) => {
         try {
-            const { data } = await API.get(`/api/found/suggestions?q=${q}`);
+            const { data } = await API.get(`/found/suggestions?q=${q}`);
             setSuggestions(data);
             setShowSuggestions(data.length > 0);
         // eslint-disable-next-line no-unused-vars
@@ -606,7 +606,7 @@ const FoundItems = () => {
             if (dateFrom) params.append('dateFrom', dateFrom);
             if (dateTo) params.append('dateTo', dateTo);
 
-            const { data } = await API.get(`/api/found?${params.toString()}`);
+            const { data } = await API.get(`/found?${params.toString()}`);
             setItems(data.items);
             setTotalPages(data.totalPages);
             setTotalItems(data.totalItems);
@@ -674,7 +674,7 @@ const FoundItems = () => {
 
     const handleDeleteConfirm = async () => {
         try {
-            await API.delete(`/api/found/${selectedItem._id}`);
+            await API.delete(`/found/${selectedItem._id}`);
             setShowDelete(false);
             setShowDetail(false);
             setSelectedItem(null);

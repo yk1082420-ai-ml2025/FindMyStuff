@@ -46,6 +46,23 @@ exports.createClaim = async (req, res) => {
         item.activeClaim = claim._id;
         await item.save();
 
+        const claimantName = req.user.fullName || 'Someone';
+        const notification = await Notification.create({
+            recipient: item.postedBy,
+            type: 'claim',
+            title: 'New Claim Received',
+            message: `${claimantName} submitted a claim for your post "${item.title}".`,
+            relatedId: claim._id,
+            relatedModel: 'Claim',
+            itemType: itemType,
+            itemId: item._id,
+        });
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(item.postedBy.toString()).emit('new_notification', notification);
+        }
+
         res.status(201).json({ success: true, data: claim });
     } catch (error) {
         console.error('createClaim error:', error);
@@ -258,6 +275,15 @@ exports.confirmReturn = async (req, res) => {
                 if (updatedClaim) {
                     claim.pointsAwarded = updatedClaim.pointsAwarded;
                     claim.pointsAwardedAt = updatedClaim.pointsAwardedAt;
+                }
+
+                if (awardResult.notifications && awardResult.notifications.length > 0) {
+                    const io = req.app.get('io');
+                    if (io) {
+                        awardResult.notifications.forEach(notif => {
+                            io.to(notif.recipient.toString()).emit('new_notification', notif);
+                        });
+                    }
                 }
             }
 

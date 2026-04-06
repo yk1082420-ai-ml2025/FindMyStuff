@@ -88,8 +88,8 @@ const AdminDashboard = () => {
   const [reportTypeFilter, setReportTypeFilter] = useState("");
   const [reportStatusUpdate, setReportStatusUpdate] = useState({
     status: "",
-    adminNotes: "",
-    resolutionAction: ""
+    actionTaken: "",
+    message: ""
   });
   const [reportStatusLoading, setReportStatusLoading] = useState(false);
 
@@ -239,8 +239,8 @@ const AdminDashboard = () => {
     setSelectedReport(report);
     setReportStatusUpdate({
       status: report.status,
-      adminNotes: report.adminNotes || "",
-      resolutionAction: report.resolution?.action || "none"
+      actionTaken: report.adminResponse?.actionTaken || '',
+      message: report.adminResponse?.message || ''
     });
     setShowReportStatusModal(true);
   };
@@ -1050,7 +1050,7 @@ const AdminDashboard = () => {
                           <tr key={report._id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                             <td className="px-6 py-4"><div><p className="text-sm font-medium text-surface-dark truncate max-w-[200px]">{report.title}</p><p className="text-xs text-gray-400 truncate max-w-[200px]">{report.description?.substring(0, 50)}...</p></div> </td>
                             <td className="px-6 py-4"><span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getReasonColor(report.reason)}`}>{report.reason?.replace(/_/g, ' ')}</span> </td>
-                            <td className="px-6 py-4"><span className="text-sm text-gray-600">{report.reporter?.name || report.reporter?.email || 'Unknown'}</span> </td>
+                            <td className="px-6 py-4"><span className="text-sm text-gray-600">{report.reporter?.fullName || report.reporter?.email || 'Unknown'}</span> </td>
                             <td className="px-6 py-4"><span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getStatusColor(report.status)}`}>{report.status}</span> </td>
                             <td className="px-6 py-4"><span className="text-xs text-gray-500 capitalize">{report.targetType}: {report.targetId?.slice(-6)}</span> </td>
                             <td className="px-6 py-4"><span className="text-sm text-gray-500">{formatDate(report.createdAt)}</span> </td>
@@ -1643,65 +1643,70 @@ const AdminDashboard = () => {
             </div>
             
             <div className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase">Title</label>
-                <p className="text-surface-dark font-medium mt-1">{selectedReport.title}</p>
-              </div>
-              
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase">Description</label>
-                <p className="text-gray-600 mt-1 whitespace-pre-wrap">{selectedReport.description}</p>
-              </div>
-              
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase">Report Type</label>
-                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.reportType}</p>
+                <div className="bg-gray-50 p-3 rounded-xl">
+                  <label className="text-xs font-medium text-gray-500 uppercase">Target Type</label>
+                  <p className="text-surface-dark mt-1 capitalize font-medium">{selectedReport.targetType}</p>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase">Priority</label>
-                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.priority}</p>
+                <div className="bg-gray-50 p-3 rounded-xl">
+                  <label className="text-xs font-medium text-gray-500 uppercase">Reason</label>
+                  <p className="text-surface-dark mt-1 font-medium capitalize">{selectedReport.reason?.replace(/_/g, ' ')}</p>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="bg-gray-50 p-3 rounded-xl">
                   <label className="text-xs font-medium text-gray-500 uppercase">Status</label>
                   <span className={`inline-flex mt-1 px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getStatusColor(selectedReport.status)}`}>
-                    {selectedReport.status?.replace('_', ' ')}
+                    {selectedReport.status}
                   </span>
                 </div>
-                <div>
+                <div className="bg-gray-50 p-3 rounded-xl">
                   <label className="text-xs font-medium text-gray-500 uppercase">Reported By</label>
                   <p className="text-surface-dark mt-1">
-                    {selectedReport.isAnonymous ? "Anonymous" : selectedReport.reportedBy?.name}
+                    {selectedReport.reporter?.fullName || selectedReport.reporter?.email || 'Unknown'}
                   </p>
                 </div>
               </div>
-              
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase">Reported Item</label>
-                <p className="text-surface-dark mt-1">
-                  {selectedReport.reportedItemModel}: {selectedReport.reportedItemId}
-                </p>
+
+              <div className="bg-gray-50 p-3 rounded-xl">
+                <label className="text-xs font-medium text-gray-500 uppercase">Target ID</label>
+                <p className="text-surface-dark mt-1 font-mono text-sm">{selectedReport.targetId}</p>
               </div>
-              
-              {selectedReport.adminNotes && (
+
+              {selectedReport.description && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase">Admin Notes</label>
-                  <p className="text-gray-600 mt-1 bg-gray-50 p-3 rounded-lg">{selectedReport.adminNotes}</p>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Description</label>
+                  <p className="text-gray-600 mt-1 whitespace-pre-wrap bg-gray-50 p-3 rounded-xl">{selectedReport.description}</p>
                 </div>
               )}
-              
-              {selectedReport.resolution?.action && selectedReport.resolution.action !== 'none' && (
+
+              {selectedReport.screenshotUrls?.length > 0 && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase">Resolution Action</label>
-                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.resolution.action}</p>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Screenshots</label>
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {selectedReport.screenshotUrls.map((url, i) => (
+                      <a key={i} href={`http://localhost:5000${url}`} target="_blank" rel="noopener noreferrer">
+                        <img src={`http://localhost:5000${url}`} alt={`screenshot-${i}`}
+                          className="w-20 h-20 rounded-xl object-cover border border-gray-200 hover:opacity-80 transition-opacity" />
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
-              
+
+              {selectedReport.adminResponse?.message && (
+                <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4">
+                  <label className="text-xs font-semibold text-emerald-700 uppercase">Previous Admin Response</label>
+                  <p className="text-gray-700 mt-2">{selectedReport.adminResponse.message}</p>
+                  {selectedReport.adminResponse.actionTaken && (
+                    <p className="text-xs text-gray-500 mt-1">Action: {selectedReport.adminResponse.actionTaken?.replace(/_/g, ' ')}</p>
+                  )}
+                </div>
+              )}
+
               <div>
-                <label className="text-xs font-medium text-gray-500 uppercase">Created At</label>
+                <label className="text-xs font-medium text-gray-500 uppercase">Submitted</label>
                 <p className="text-gray-500 text-sm mt-1">{new Date(selectedReport.createdAt).toLocaleString()}</p>
               </div>
             </div>
@@ -1714,7 +1719,7 @@ const AdminDashboard = () => {
                 }}
                 className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition-all"
               >
-                Update Status
+                Resolve / Update
               </button>
               <button
                 onClick={() => setShowReportViewModal(false)}
@@ -1732,7 +1737,10 @@ const AdminDashboard = () => {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-surface-dark">Update Report Status</h3>
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-amber-500" />
+                <h3 className="text-lg font-bold text-surface-dark">Resolve Report</h3>
+              </div>
               <button
                 onClick={() => setShowReportStatusModal(false)}
                 className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
@@ -1740,49 +1748,54 @@ const AdminDashboard = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-4">
+              <p className="text-xs text-gray-500">Reporting: <span className="font-semibold text-gray-700 capitalize">{selectedReport.targetType}</span> for <span className="font-semibold text-gray-700 capitalize">{selectedReport.reason?.replace(/_/g, ' ')}</span></p>
+              <p className="text-xs text-gray-400 mt-0.5">By: {selectedReport.reporter?.fullName || 'Unknown'}</p>
+            </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1.5">Status</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Update Status</label>
                 <select
                   value={reportStatusUpdate.status}
                   onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, status: e.target.value })}
                   className={selectClass}
                 >
                   <option value="pending">Pending</option>
-                  <option value="under_review">Under Review</option>
+                  <option value="reviewing">Under Review</option>
                   <option value="resolved">Resolved</option>
                   <option value="dismissed">Dismissed</option>
                 </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1.5">Admin Notes</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Action Taken</label>
+                <select
+                  value={reportStatusUpdate.actionTaken}
+                  onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, actionTaken: e.target.value })}
+                  className={selectClass}
+                >
+                  <option value="">— Select action —</option>
+                  <option value="no_action">No Action</option>
+                  <option value="warning">Warning Issued</option>
+                  <option value="content_removed">Content Removed</option>
+                  <option value="user_suspended">User Suspended</option>
+                  <option value="user_banned">User Banned</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Response Message to Student <span className="text-red-400">*</span></label>
                 <textarea
-                  value={reportStatusUpdate.adminNotes}
-                  onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, adminNotes: e.target.value })}
-                  className={inputClass}
-                  rows={3}
-                  placeholder="Add notes about this report..."
+                  value={reportStatusUpdate.message}
+                  onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, message: e.target.value })}
+                  className={`${inputClass} resize-none`}
+                  rows={4}
+                  placeholder="Explain what action was taken or why the report was dismissed. The student will see this message."
                 />
               </div>
-              
-              {reportStatusUpdate.status === 'resolved' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1.5">Resolution Action</label>
-                  <select
-                    value={reportStatusUpdate.resolutionAction}
-                    onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, resolutionAction: e.target.value })}
-                    className={selectClass}
-                  >
-                    <option value="none">No Action</option>
-                    <option value="warning">Warning Issued</option>
-                    <option value="removed">Content Removed</option>
-                    <option value="banned">User Banned</option>
-                    <option value="restricted">User Restricted</option>
-                  </select>
-                </div>
-              )}
             </div>
             
             <div className="flex gap-3 mt-6">
@@ -1794,17 +1807,15 @@ const AdminDashboard = () => {
               </button>
               <button
                 onClick={handleReportStatusUpdate}
-                disabled={reportStatusLoading}
-                className="flex-1 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl text-sm font-medium text-white hover:from-primary-600 hover:to-accent-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={reportStatusLoading || !reportStatusUpdate.message?.trim()}
+                className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl text-sm font-medium text-white hover:from-amber-600 hover:to-orange-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {reportStatusLoading ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Update
-                  </>
+                  <CheckCircle className="w-4 h-4" />
                 )}
+                Save Response
               </button>
             </div>
           </div>

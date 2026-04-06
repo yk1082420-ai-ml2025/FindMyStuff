@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-<<<<<<< HEAD
-import { Menu, X, Search, LogOut, User, LayoutDashboard, MessageCircle, Trophy } from 'lucide-react';
-=======
 import { useNotifications } from '../context/NotificationContext';
-import { Menu, X, Search, LogOut, LayoutDashboard, Bell, FileText, MessageCircle, CheckCheck, GitMerge } from 'lucide-react';
+import { Menu, X, Search, LogOut, User, LayoutDashboard, Bell, FileText, MessageCircle, CheckCheck, GitMerge, Trophy } from 'lucide-react';
 
 const formatTimeAgo = (date) => {
     const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -96,7 +93,6 @@ const NotificationDropdown = ({ notifications, unreadCount, onNotifClick, onMark
         </div>
     </div>
 );
->>>>>>> 9fc9740e0a54c8bc823eda0ffd93750894967bf0
 
 const Navbar = () => {
     const { user, logout } = useAuth();
