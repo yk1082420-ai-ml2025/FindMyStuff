@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const reportRoutes = require('./routes/reportRoutes');
 const chatbotRoutes = require('./routes/ChattRoutes');
+const gamificationRoutes = require('./routes/gamificationRoutes');
 
 dotenv.config();
 
@@ -24,19 +25,16 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
 
-    // User joins their personal notification room
     socket.on('setup', (userId) => {
         socket.join(userId);
         console.log('User joined room:', userId);
     });
 
-    // Join a chat room
     socket.on('join_chat', (chatId) => {
         socket.join(chatId);
         console.log('Joined chat room:', chatId);
     });
 
-    // Leave a chat room
     socket.on('leave_chat', (chatId) => {
         socket.leave(chatId);
         console.log('Left chat room:', chatId);
@@ -53,7 +51,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Make io accessible to controllers
 app.set('io', io);
 
 // Routes
@@ -68,9 +65,12 @@ app.use('/api/found', require('./routes/foundItemRoutes'));
 app.use('/api/notices', require('./routes/noticeRoutes'));
 app.use('/api/reports', reportRoutes);
 app.use('/api/chat', chatbotRoutes);
+app.use('/api/gamification', require('./routes/gamificationRoutes'));
+app.use('/api/leaderboard', require('./routes/leaderboardRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/matches', require('./routes/matchRoutes'));
 
-// Health chec
+// Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
@@ -88,6 +88,9 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
     try {
         await connectDB();
+        
+        require('./jobs/monthlyReset');
+        
         const PORT = process.env.PORT || 5000;
         server.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);

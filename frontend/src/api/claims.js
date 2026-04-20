@@ -46,13 +46,13 @@ export const getClaimById = async (id) => {
 
 // Approve a claim (post owner)
 export const approveClaim = async (id) => {
-    const { data } = await API.put(`/claims/${id}/approve`);
+    const { data } = await API.post(`/claims/${id}/approve`);
     return data;
 };
 
 // Reject a claim (post owner)
 export const rejectClaim = async (id, reason = '') => {
-    const { data } = await API.put(`/claims/${id}/reject`, { reason });
+    const { data } = await API.post(`/claims/${id}/reject`, { reason });
     return data;
 };
 

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const claimSchema = new mongoose.Schema({
     itemId: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: String,
         required: true
     },
     itemType: {
@@ -52,7 +52,26 @@ const claimSchema = new mongoose.Schema({
     // Rejection reason (optional, set by post owner)
     rejectionReason: { type: String, default: '' },
 
-    resolvedAt: { type: Date }
+    resolvedAt: { type: Date },
+
+    // ⭐ NEW GAMIFICATION FIELDS (start)
+    pointsAwarded: {
+        type: Boolean,
+        default: false,
+        comment: 'Prevents awarding points more than once for this claim'
+    },
+    pointsAwardedAt: {
+        type: Date,
+        default: null,
+        comment: 'Timestamp when points were awarded'
+    },
+    returnConfirmedBy: {
+        type: String,
+        enum: ['owner', 'finder', null],
+        default: null,
+        comment: 'Who confirmed the return (owner or finder)'
+    },
+   
 }, {
     timestamps: true
 });

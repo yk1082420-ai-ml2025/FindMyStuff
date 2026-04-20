@@ -626,12 +626,25 @@ const FoundItems = () => {
     // Handle deep-link to open a specific item from Dashboard claims
     const locationObj = useLocation();
     useEffect(() => {
-        if (locationObj.state?.openItem) {
-            setSelectedItem(locationObj.state.openItem);
-            setShowDetail(true);
-            // Clear the state so it doesn't reopen on refresh
-            window.history.replaceState({}, '');
-        }
+        const handleDeepLink = async () => {
+            if (locationObj.state?.openItem) {
+                setSelectedItem(locationObj.state.openItem);
+                setShowDetail(true);
+                window.history.replaceState({}, '');
+            } else if (locationObj.state?.openItemId) {
+                const itemId = locationObj.state.openItemId;
+                try {
+                    const { data } = await API.get(`/found/${itemId}`);
+                    setSelectedItem(data);
+                    setShowDetail(true);
+                } catch (error) {
+                    console.error('Failed to fetch item for deep-link:', error);
+                    showToast('Failed to load item details', 'error');
+                }
+                window.history.replaceState({}, '');
+            }
+        };
+        handleDeepLink();
     }, [locationObj.state]);
 
     const showToast = (text, type = 'success') => {

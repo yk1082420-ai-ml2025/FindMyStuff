@@ -14,6 +14,7 @@ import LostItems from './pages/LostItems';
 import FoundItems from './pages/FoundItems';
 import Notices from './pages/Notices';
 import ChatBot from './pages/ChatBot';
+import Leaderboard from './pages/Leaderboard';
 
 const AuthRedirect = ({ children }) => {
   const { user } = useAuth();
@@ -59,6 +60,7 @@ function App() {
               <Route path="/login" element={<AuthRedirect><Login /></AuthRedirect>} />
               <Route path="/register" element={<AuthRedirect><Register /></AuthRedirect>} />
               <Route path="/dashboard" element={<ProtectedRoute><StudentDashboard /></ProtectedRoute>} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/chat" element={<Navigate to="/dashboard" replace />} />
               <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
               <Route path="/lost" element={<LostItems />} />

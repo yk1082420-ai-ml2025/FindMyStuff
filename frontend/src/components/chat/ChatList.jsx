@@ -33,7 +33,7 @@ const ChatList = ({ selectedChatId, onSelectChat }) => {
         return () => clearInterval(interval);
     }, []);
 
-    if (loading) return (
+    if (loading) return (  //
         <div className="flex-1 flex items-center justify-center">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
         </div>

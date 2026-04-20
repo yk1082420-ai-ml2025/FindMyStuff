@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const chatSchema = new mongoose.Schema({
     claimId: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: String,
         ref: 'Claim',
         required: true
     },
@@ -12,7 +12,7 @@ const chatSchema = new mongoose.Schema({
         required: true
     }],
     itemId: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: String,
         required: true
     },
     itemType: {

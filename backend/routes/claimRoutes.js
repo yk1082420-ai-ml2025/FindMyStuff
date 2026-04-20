@@ -15,7 +15,7 @@ const {
 
 const router = express.Router();
 
-// Configure multer for proof image uploads
+// Configure multer for proof image uploads (same as before)
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, 'uploads/'),
     filename: (req, file, cb) => cb(null, `claim-${Date.now()}${path.extname(file.originalname)}`)
@@ -23,7 +23,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         const allowed = /jpeg|jpg|png|webp/;
         const ok = allowed.test(path.extname(file.originalname).toLowerCase()) && allowed.test(file.mimetype);
@@ -31,26 +31,16 @@ const upload = multer({
     }
 });
 
-// Confirm return / retrieval — MUST be before /:itemType/:itemId or it gets swallowed
+// ✅ Static routes (specific paths) – MUST come before dynamic routes
 router.post('/:id/confirm-return', protect, confirmReturn);
-
-// Submit a claim (with up to 3 proof images)
-router.post('/:itemType/:itemId', protect, upload.array('proofImages', 3), createClaim);
-
-// Get claims submitted by current user — MUST be before /:itemType/:itemId
+router.post('/:id/approve', protect, approveClaim);      // changed from PUT to POST
+router.post('/:id/reject', protect, rejectClaim);        // changed from PUT to POST
 router.get('/mine', protect, getMyClaims);
-
-// Get claims received by current user (on their own posts)
 router.get('/received', protect, getReceivedClaims);
-
-// Get a single claim by ID
 router.get('/detail/:id', protect, getClaimById);
 
-// Approve or reject a claim
-router.put('/:id/approve', protect, approveClaim);
-router.put('/:id/reject', protect, rejectClaim);
-
-// Get all claims for an item (post owner only)
+// ✅ Dynamic routes (with parameters)
+router.post('/:itemType/:itemId', protect, upload.array('proofImages', 3), createClaim);
 router.get('/:itemType/:itemId', protect, getClaimsForItem);
 
 module.exports = router;

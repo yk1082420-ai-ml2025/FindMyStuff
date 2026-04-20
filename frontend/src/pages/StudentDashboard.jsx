@@ -28,9 +28,9 @@ import {
     Eye,
     ClipboardList,
     Flag,
-    Bell,
-    CheckCheck,
-    Check
+    TrendingUp, 
+     Award,
+
 } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import { formatTimeAgo } from '../utils/dateUtils';
@@ -113,23 +113,30 @@ const StudentDashboard = () => {
             ]).finally(() => setPostsLoading(false));
         }
     }, [activeTab]);
+    
+    useEffect(() => {
+    if (activeTab === 'overview') {
+        fetchProfile();
+    }
+}, [activeTab]);
 
-    const fetchProfile = async () => {
-        try {
-            const { data } = await API.get('/users/profile');
-            setProfile(data);
-            setEditForm({
-                fullName: data.fullName,
-                email: data.email,
-                password: '',
-            });
-        // eslint-disable-next-line no-unused-vars
-        } catch (error) {
-            setMessage({ text: 'Failed to load profile', type: 'error' });
-        } finally {
-            setLoading(false);
-        }
-    };
+const fetchProfile = async () => {
+    try {
+        const { data } = await API.get('/users/profile');
+        console.log('Profile data from backend:', data); 
+        setProfile(data);
+        setEditForm({
+            fullName: data.fullName,
+            email: data.email,
+            password: '',
+        });
+    // eslint-disable-next-line no-unused-vars
+    } catch (error) {
+        setMessage({ text: 'Failed to load profile', type: 'error' });
+    } finally {
+        setLoading(false);
+    }
+};
 
     const handleSave = async () => {
         setSaving(true);
@@ -329,64 +336,75 @@ const StudentDashboard = () => {
                         </div>
                     )}
 
-                    {/* Overview Tab */}
-                    {activeTab === 'overview' && (
-                        <>
-                            <div className="mb-8">
-                                <h1 className="text-2xl font-bold text-surface-dark">Welcome back, {profile?.fullName?.split(' ')[0]}!</h1>
-                                <p className="text-gray-500 text-sm mt-1">Here's an overview of your account</p>
-                            </div>
+{/* Overview Tab */}
+{activeTab === 'overview' && (
+    <>
+        <div className="mb-8">
+            <h1 className="text-2xl font-bold text-surface-dark">Welcome back, {profile?.fullName?.split(' ')[0]}!</h1>
+            <p className="text-gray-500 text-sm mt-1">Here's an overview of your account</p>
+        </div>
 
-                            {/* Stats cards */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                                {[
-                                    {
-                                        label: 'Points',
-                                        value: profile?.points || 0,
-                                        icon: <Trophy className="w-5 h-5" />,
-                                        gradient: 'from-amber-500 to-orange-500',
-                                        bg: 'bg-amber-50',
-                                        text: 'text-amber-600',
-                                    },
-                                    {
-                                        label: 'Lost Posts',
-                                        value: profile?.activityHistory?.lostPosts?.length || 0,
-                                        icon: <Search className="w-5 h-5" />,
-                                        gradient: 'from-red-500 to-pink-500',
-                                        bg: 'bg-red-50',
-                                        text: 'text-red-600',
-                                    },
-                                    {
-                                        label: 'Found Posts',
-                                        value: profile?.activityHistory?.foundPosts?.length || 0,
-                                        icon: <CheckCircle className="w-5 h-5" />,
-                                        gradient: 'from-emerald-500 to-teal-500',
-                                        bg: 'bg-emerald-50',
-                                        text: 'text-emerald-600',
-                                    },
-                                    {
-                                        label: 'Claims',
-                                        value: myClaims.length + receivedClaims.length,
-                                        icon: <FileText className="w-5 h-5" />,
-                                        gradient: 'from-primary-500 to-accent-500',
-                                        bg: 'bg-primary-50',
-                                        text: 'text-primary-600',
-                                    },
-                                ].map((stat, i) => (
-                                    <div
-                                        key={i}
-                                        className="p-5 bg-white border border-gray-200/60 rounded-2xl hover:shadow-md hover:shadow-gray-200/50 transition-all"
-                                    >
-                                        <div className="flex items-center justify-between mb-3">
-                                            <span className="text-sm text-gray-500">{stat.label}</span>
-                                            <div className={`w-9 h-9 rounded-lg ${stat.bg} flex items-center justify-center ${stat.text}`}>
-                                                {stat.icon}
-                                            </div>
-                                        </div>
-                                        <p className="text-2xl font-bold text-surface-dark">{stat.value}</p>
-                                    </div>
-                                ))}
-                            </div>
+        {/* Stats cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {[
+                {
+                    label: 'Total Points',
+                    value: profile?.points || 0,
+                    subValue: profile?.monthlyPoints ? `+${profile.monthlyPoints} this month` : null,
+                    icon: <Trophy className="w-5 h-5" />,
+                    bg: 'bg-amber-50',
+                    text: 'text-amber-600',
+                },
+                {
+                    label: 'Lost Posts',
+                    value: profile?.activityHistory?.lostPosts?.length || 0,
+                    icon: <Search className="w-5 h-5" />,
+                    bg: 'bg-red-50',
+                    text: 'text-red-600',
+                },
+                {
+                    label: 'Found Posts',
+                    value: profile?.activityHistory?.foundPosts?.length || 0,
+                    icon: <CheckCircle className="w-5 h-5" />,
+                    bg: 'bg-emerald-50',
+                    text: 'text-emerald-600',
+                },
+                {
+                    label: 'Claims',
+                    value: myClaims.length + receivedClaims.length,
+                    icon: <FileText className="w-5 h-5" />,
+                    bg: 'bg-primary-50',
+                    text: 'text-primary-600',
+                },
+                {
+    label: 'Successful Returns',
+    value: profile?.successfulReturns || 0,
+    icon: <CheckCircle className="w-5 h-5" />,
+    bg: 'bg-teal-50',
+    text: 'text-teal-600',
+}
+            ].map((stat, i) => (
+                <div
+                    key={i}
+                    className="p-5 bg-white border border-gray-200/60 rounded-2xl hover:shadow-md hover:shadow-gray-200/50 transition-all"
+                >
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm text-gray-500">{stat.label}</span>
+                        <div className={`w-9 h-9 rounded-lg ${stat.bg} flex items-center justify-center ${stat.text}`}>
+                            {stat.icon}
+                        </div>
+                    </div>
+                    <div>
+                        <p className="text-2xl font-bold text-surface-dark">{stat.value}</p>
+                        {stat.subValue && (
+                            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3" /> {stat.subValue}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            ))}
+        </div>
 
                             {/* Profile Card */}
                             <div className="bg-white border border-gray-200/60 rounded-2xl overflow-hidden shadow-sm">

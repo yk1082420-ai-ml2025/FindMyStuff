@@ -29,12 +29,10 @@ import {
   Flag, // Add Flag icon for reports
   XCircle,
   Clock as ClockIcon,
-  Bell,
-  CheckCheck,
-  Check,
-  Eye,
-  FileText,
-  MessageCircle
+  GitMerge,
+  Zap,
+  ArrowLeftRight,
+  Package,
 } from "lucide-react";
 import { useNotifications } from "../context/NotificationContext";
 import { formatTimeAgo } from "../utils/dateUtils";
@@ -90,10 +88,18 @@ const AdminDashboard = () => {
   const [reportTypeFilter, setReportTypeFilter] = useState("");
   const [reportStatusUpdate, setReportStatusUpdate] = useState({
     status: "",
-    adminNotes: "",
-    resolutionAction: ""
+    actionTaken: "",
+    message: ""
   });
   const [reportStatusLoading, setReportStatusLoading] = useState(false);
+
+  // ─── Matching state ─────────────────────────────────────────────
+  const [matches, setMatches] = useState([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchRunning, setMatchRunning] = useState(false);
+  const [matchStats, setMatchStats] = useState({ pending: 0, confirmed: 0, dismissed: 0 });
+  const [matchStatusFilter, setMatchStatusFilter] = useState('pending');
+  const [matchActionLoading, setMatchActionLoading] = useState(null); // stores match _id being processed
 
   // ─── Notices state ─────────────────────────────────────────
   const CATEGORIES = ['alert', 'event', 'general', 'tips'];
@@ -159,6 +165,14 @@ const AdminDashboard = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, reportsPage, reportStatusFilter, reportTypeFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'matching') {
+      fetchMatches();
+      fetchMatchStats();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, matchStatusFilter]);
 
   // ─── Reports functions ─────────────────────────────────────────
   const fetchReports = async () => {
@@ -235,8 +249,8 @@ const AdminDashboard = () => {
     setSelectedReport(report);
     setReportStatusUpdate({
       status: report.status,
-      adminNotes: report.adminNotes || "",
-      resolutionAction: report.resolution?.action || "none"
+      actionTaken: report.adminResponse?.actionTaken || '',
+      message: report.adminResponse?.message || ''
     });
     setShowReportStatusModal(true);
   };
@@ -266,6 +280,73 @@ const AdminDashboard = () => {
       other: "bg-gray-50 text-gray-600 border-gray-200"
     };
     return colors[reason] || colors.other;
+  };
+
+  // ─── Matching functions ─────────────────────────────────────────────────────
+  const fetchMatches = async () => {
+    setMatchesLoading(true);
+    try {
+      const { data } = await API.get(`/matches?status=${matchStatusFilter}`);
+      setMatches(data.data || []);
+    } catch (error) {
+      console.error('Failed to fetch matches', error);
+    } finally {
+      setMatchesLoading(false);
+    }
+  };
+
+  const fetchMatchStats = async () => {
+    try {
+      const { data } = await API.get('/matches/stats');
+      setMatchStats(data.data || { pending: 0, confirmed: 0, dismissed: 0 });
+    } catch (error) {
+      console.error('Failed to fetch match stats', error);
+    }
+  };
+
+  const handleRunMatching = async () => {
+    setMatchRunning(true);
+    try {
+      const { data } = await API.post('/matches/run');
+      setMessage({ text: data.message, type: 'success' });
+      setTimeout(() => setMessage({ text: '', type: '' }), 4000);
+      fetchMatches();
+      fetchMatchStats();
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || 'Matching failed', type: 'error' });
+    } finally {
+      setMatchRunning(false);
+    }
+  };
+
+  const handleConfirmMatch = async (matchId) => {
+    setMatchActionLoading(matchId);
+    try {
+      await API.post(`/matches/${matchId}/confirm`);
+      setMessage({ text: 'Match confirmed! Both users have been notified.', type: 'success' });
+      setTimeout(() => setMessage({ text: '', type: '' }), 4000);
+      fetchMatches();
+      fetchMatchStats();
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || 'Failed to confirm match', type: 'error' });
+    } finally {
+      setMatchActionLoading(null);
+    }
+  };
+
+  const handleDismissMatch = async (matchId) => {
+    setMatchActionLoading(matchId);
+    try {
+      await API.post(`/matches/${matchId}/dismiss`);
+      setMessage({ text: 'Match dismissed.', type: 'success' });
+      setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+      fetchMatches();
+      fetchMatchStats();
+    } catch (error) {
+      setMessage({ text: error.response?.data?.message || 'Failed to dismiss match', type: 'error' });
+    } finally {
+      setMatchActionLoading(null);
+    }
   };
 
   // ─── Notices functions (your existing code) ─────────────────────────
@@ -513,15 +594,12 @@ const AdminDashboard = () => {
   };
 
   const sidebarItems = [
-    {
-      id: "overview",
-      label: "Overview",
-      icon: <LayoutDashboard className="w-5 h-5" />,
-    },
+    { id: "overview", label: "Overview", icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: "users", label: "Users", icon: <Users className="w-5 h-5" /> },
     { id: "reports", label: "Reports", icon: <Flag className="w-5 h-5" /> },
     { id: "notifications", label: "Notifications", icon: <Bell className="w-5 h-5" /> },
     { id: "notices", label: "Notices", icon: <Megaphone className="w-5 h-5" /> },
+    { id: "matching", label: "Matching Posts", icon: <GitMerge className="w-5 h-5" /> },
   ];
 
   const statCards = [
@@ -1007,7 +1085,7 @@ const AdminDashboard = () => {
                           <tr key={report._id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                             <td className="px-6 py-4"><div><p className="text-sm font-medium text-surface-dark truncate max-w-[200px]">{report.title}</p><p className="text-xs text-gray-400 truncate max-w-[200px]">{report.description?.substring(0, 50)}...</p></div> </td>
                             <td className="px-6 py-4"><span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getReasonColor(report.reason)}`}>{report.reason?.replace(/_/g, ' ')}</span> </td>
-                            <td className="px-6 py-4"><span className="text-sm text-gray-600">{report.reporter?.name || report.reporter?.email || 'Unknown'}</span> </td>
+                            <td className="px-6 py-4"><span className="text-sm text-gray-600">{report.reporter?.fullName || report.reporter?.email || 'Unknown'}</span> </td>
                             <td className="px-6 py-4"><span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getStatusColor(report.status)}`}>{report.status}</span> </td>
                             <td className="px-6 py-4"><span className="text-xs text-gray-500 capitalize">{report.targetType}: {report.targetId?.slice(-6)}</span> </td>
                             <td className="px-6 py-4"><span className="text-sm text-gray-500">{formatDate(report.createdAt)}</span> </td>
@@ -1023,118 +1101,220 @@ const AdminDashboard = () => {
             </>
           )}
 
-
-          {/* Notifications Tab */}
-          {activeTab === 'notifications' && (
+          {/* Matching Posts Tab */}
+          {activeTab === "matching" && (
             <>
-              <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              {/* Header row */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
                   <h1 className="text-2xl font-bold text-surface-dark flex items-center gap-2">
-                    <Bell className="w-6 h-6 text-primary-600" />
-                    Notifications
+                    <GitMerge className="w-6 h-6 text-violet-500" /> Matching Posts
                   </h1>
                   <p className="text-gray-500 text-sm mt-1">
-                    Your personal notifications and updates
+                    Automatically detect and review potential lost ↔ found matches
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  {notifUnreadCount > 0 && (
-                    <button
-                      onClick={markAllAsRead}
-                      className="px-4 py-2 bg-primary-50 text-primary-600 border border-primary-200/60 rounded-xl text-sm font-medium hover:bg-primary-100 transition-all flex items-center gap-2"
-                    >
-                      <CheckCheck className="w-4 h-4" />
-                      Mark all read
-                    </button>
-                  )}
-                  {notifications.length > 0 && (
-                    <button
-                      onClick={() => {
-                        if (window.confirm('Are you sure you want to clear all notifications?')) {
-                          deleteAllNotifications();
-                        }
-                      }}
-                      className="px-4 py-2 bg-gray-50 text-gray-600 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-100 transition-all flex items-center gap-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Clear all
-                    </button>
-                  )}
-                </div>
+                <button
+                  onClick={handleRunMatching}
+                  disabled={matchRunning}
+                  className="px-5 py-2.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-medium text-sm hover:from-violet-600 hover:to-purple-700 transition-all shadow-md shadow-violet-500/20 flex items-center gap-2 self-start disabled:opacity-60"
+                >
+                  {matchRunning
+                    ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : <Zap className="w-4 h-4" />}
+                  {matchRunning ? 'Scanning...' : 'Run Matching'}
+                </button>
               </div>
 
-              <div className="space-y-3">
-                {notifications.length === 0 ? (
-                  <div className="bg-white border border-gray-200/60 rounded-2xl p-12 text-center">
-                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Bell className="w-8 h-8 text-gray-300" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-surface-dark">No notifications yet</h3>
-                    <p className="text-gray-400 max-w-xs mx-auto mt-1">
-                      Everything is quiet for now.
-                    </p>
+              {/* Stat cards */}
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                {[
+                  { label: 'Pending Review', value: matchStats.pending, bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
+                  { label: 'Confirmed', value: matchStats.confirmed, bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' },
+                  { label: 'Dismissed', value: matchStats.dismissed, bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200' },
+                ].map((s) => (
+                  <div key={s.label} className={`p-5 bg-white border ${s.border} rounded-2xl`}>
+                    <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-3xl font-bold ${s.text}`}>{s.value}</p>
                   </div>
-                ) : (
-                  notifications.map((notif) => (
-                    <div
-                      key={notif._id}
-                      className={`group bg-white border rounded-2xl p-4 transition-all hover:shadow-md hover:border-primary-200/60 flex items-start gap-4 ${!notif.isRead ? 'border-primary-100 bg-primary-50/10' : 'border-gray-200/60'
-                        }`}
-                    >
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${notif.type === 'claim' ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
-                        }`}>
-                        {notif.type === 'claim' ? <FileText className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <h4 className={`text-sm leading-tight truncate ${!notif.isRead ? 'font-bold text-surface-dark' : 'font-medium text-gray-700'}`}>
-                            {notif.title}
-                          </h4>
-                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">
-                            {formatTimeAgo(notif.createdAt)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                          {notif.message}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {!notif.isRead && (
-                          <button
-                            onClick={() => markAsRead(notif._id)}
-                            className="p-2 text-primary-500 hover:bg-primary-50 rounded-lg transition-all"
-                            title="Mark as read"
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => deleteNotification(notif._id)}
-                          className="p-2 text-gray-400 hover:text-danger-500 hover:bg-danger-50 rounded-lg transition-all"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleNotifClick(notif)}
-                          className="p-2 text-gray-400 hover:text-primary-500 hover:bg-gray-50 rounded-lg transition-all"
-                          title="View details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </div>
-                      {!notif.isRead && (
-                        <div className="w-2 h-2 rounded-full bg-primary-500 mt-2 shrink-0 group-hover:hidden" />
-                      )}
-                    </div>
-                  ))
-                )}
+                ))}
               </div>
+
+              {/* Status filter tabs */}
+              <div className="flex gap-2 mb-5">
+                {['pending', 'confirmed', 'dismissed'].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setMatchStatusFilter(s)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium capitalize transition-all border ${matchStatusFilter === s
+                      ? 'bg-violet-500 text-white border-violet-500 shadow-sm'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-violet-300 hover:text-violet-600'}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              {/* Match list */}
+              {matchesLoading ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="w-10 h-10 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : matches.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 bg-white border border-gray-200 rounded-2xl">
+                  <GitMerge className="w-14 h-14 text-gray-200 mb-4" />
+                  <p className="text-gray-400 font-medium">No {matchStatusFilter} matches</p>
+                  <p className="text-xs text-gray-400 mt-1">Click "Run Matching" to scan for potential pairs</p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {matches.map((match, idx) => {
+                    const lost = match.lostItem;
+                    const found = match.foundItem;
+                    const isActing = matchActionLoading === match._id;
+                    const scoreLabel = `${match.score}/4`;
+                    const confidencePct = Math.round((match.score / 4) * 100);
+                    const confidenceColor = match.score === 4
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                      : 'bg-amber-100 text-amber-700 border-amber-300';
+
+                    return (
+                      <div key={match._id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        {/* Top bar */}
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-gray-700">Match #{String(idx + 1).padStart(4, '0')}</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${confidenceColor}`}>
+                              {scoreLabel} · {confidencePct}% Confidence
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">{new Date(match.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+
+                        {/* Side-by-side posts */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                          {/* LOST POST */}
+                          <div className="p-5">
+                            <div className="flex items-center gap-1.5 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-red-500" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-red-500">Lost Post</span>
+                            </div>
+                            <div className="flex items-start gap-3 mb-4">
+                              {lost?.images?.[0] ? (
+                                <img src={`http://localhost:5000${lost.images[0]}`} alt={lost?.title}
+                                  className="w-14 h-14 rounded-xl object-cover border border-gray-100 shrink-0" />
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                                  <Package className="w-6 h-6 text-red-200" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-gray-800 truncate">{lost?.title || '—'}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">by {lost?.postedBy?.fullName || 'Unknown'} · {lost?.postedBy?.studentId || ''}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1 text-xs text-gray-500">
+                              <p><span className="font-medium text-gray-600">Category:</span> {lost?.category || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Location:</span> {lost?.lastSeenLocation || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Date Lost:</span> {lost?.dateLost ? new Date(lost.dateLost).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                              {lost?.color && <p><span className="font-medium text-gray-600">Color:</span> {lost.color}</p>}
+                              {lost?.brand && <p><span className="font-medium text-gray-600">Brand:</span> {lost.brand}</p>}
+                            </div>
+                          </div>
+
+                          {/* FOUND POST */}
+                          <div className="p-5 relative">
+                            {/* Swap icon in centre on md+ */}
+                            <div className="hidden md:flex absolute -left-5 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-violet-500 text-white items-center justify-center shadow-lg shadow-violet-500/30">
+                              <ArrowLeftRight className="w-4 h-4" />
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Found Post</span>
+                            </div>
+                            <div className="flex items-start gap-3 mb-4">
+                              {found?.images?.[0] ? (
+                                <img src={`http://localhost:5000${found.images[0]}`} alt={found?.title}
+                                  className="w-14 h-14 rounded-xl object-cover border border-gray-100 shrink-0" />
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                                  <Package className="w-6 h-6 text-emerald-200" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-gray-800 truncate">{found?.title || '—'}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">by {found?.postedBy?.fullName || 'Unknown'} · {found?.postedBy?.studentId || ''}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1 text-xs text-gray-500">
+                              <p><span className="font-medium text-gray-600">Category:</span> {found?.category || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Location:</span> {found?.foundLocation || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Date Found:</span> {found?.dateFound ? new Date(found.dateFound).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                              {found?.color && <p><span className="font-medium text-gray-600">Color:</span> {found.color}</p>}
+                              {found?.brand && <p><span className="font-medium text-gray-600">Brand:</span> {found.brand}</p>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Matched On tags + Actions */}
+                        <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50/40">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            {/* Matched on tags */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Matched on:</span>
+                              {match.matchedOn?.map((attr) => (
+                                <span key={attr} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-xs font-medium">
+                                  <Check className="w-3 h-3" /> {attr}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Actions */}
+                            {matchStatusFilter === 'pending' && (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={() => handleConfirmMatch(match._id)}
+                                  disabled={isActing}
+                                  className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm shadow-emerald-500/20 disabled:opacity-60"
+                                >
+                                  {isActing ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                  Confirm Match &amp; Notify Both
+                                </button>
+                                <button
+                                  onClick={() => handleDismissMatch(match._id)}
+                                  disabled={isActing}
+                                  className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                >
+                                  <X className="w-3.5 h-3.5" /> Dismiss
+                                </button>
+                              </div>
+                            )}
+                            {matchStatusFilter === 'confirmed' && (
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+                                <CheckCircle className="w-3.5 h-3.5" /> Confirmed — Both users notified
+                              </span>
+                            )}
+                            {matchStatusFilter === 'dismissed' && (
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-full">
+                                <XCircle className="w-3.5 h-3.5" /> Dismissed
+                              </span>
+                            )}
+                          </div>
+                          {matchStatusFilter === 'pending' && (
+                            <p className="text-[10px] text-gray-400 mt-2">Admin review required before notification is sent</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
+
+          {/* Notices Tab */}
           {activeTab === "notices" && (
+
             <>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div><h1 className="text-2xl font-bold text-surface-dark">Notice Management</h1><p className="text-gray-500 text-sm mt-1">{noticesTotalItems} total notices</p></div>
@@ -1498,65 +1678,70 @@ const AdminDashboard = () => {
             </div>
             
             <div className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase">Title</label>
-                <p className="text-surface-dark font-medium mt-1">{selectedReport.title}</p>
-              </div>
-              
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase">Description</label>
-                <p className="text-gray-600 mt-1 whitespace-pre-wrap">{selectedReport.description}</p>
-              </div>
-              
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase">Report Type</label>
-                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.reportType}</p>
+                <div className="bg-gray-50 p-3 rounded-xl">
+                  <label className="text-xs font-medium text-gray-500 uppercase">Target Type</label>
+                  <p className="text-surface-dark mt-1 capitalize font-medium">{selectedReport.targetType}</p>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase">Priority</label>
-                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.priority}</p>
+                <div className="bg-gray-50 p-3 rounded-xl">
+                  <label className="text-xs font-medium text-gray-500 uppercase">Reason</label>
+                  <p className="text-surface-dark mt-1 font-medium capitalize">{selectedReport.reason?.replace(/_/g, ' ')}</p>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="bg-gray-50 p-3 rounded-xl">
                   <label className="text-xs font-medium text-gray-500 uppercase">Status</label>
                   <span className={`inline-flex mt-1 px-2.5 py-1 rounded-lg text-xs font-medium capitalize border ${getStatusColor(selectedReport.status)}`}>
-                    {selectedReport.status?.replace('_', ' ')}
+                    {selectedReport.status}
                   </span>
                 </div>
-                <div>
+                <div className="bg-gray-50 p-3 rounded-xl">
                   <label className="text-xs font-medium text-gray-500 uppercase">Reported By</label>
                   <p className="text-surface-dark mt-1">
-                    {selectedReport.isAnonymous ? "Anonymous" : selectedReport.reportedBy?.name}
+                    {selectedReport.reporter?.fullName || selectedReport.reporter?.email || 'Unknown'}
                   </p>
                 </div>
               </div>
-              
-              <div>
-                <label className="text-xs font-medium text-gray-500 uppercase">Reported Item</label>
-                <p className="text-surface-dark mt-1">
-                  {selectedReport.reportedItemModel}: {selectedReport.reportedItemId}
-                </p>
+
+              <div className="bg-gray-50 p-3 rounded-xl">
+                <label className="text-xs font-medium text-gray-500 uppercase">Target ID</label>
+                <p className="text-surface-dark mt-1 font-mono text-sm">{selectedReport.targetId}</p>
               </div>
-              
-              {selectedReport.adminNotes && (
+
+              {selectedReport.description && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase">Admin Notes</label>
-                  <p className="text-gray-600 mt-1 bg-gray-50 p-3 rounded-lg">{selectedReport.adminNotes}</p>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Description</label>
+                  <p className="text-gray-600 mt-1 whitespace-pre-wrap bg-gray-50 p-3 rounded-xl">{selectedReport.description}</p>
                 </div>
               )}
-              
-              {selectedReport.resolution?.action && selectedReport.resolution.action !== 'none' && (
+
+              {selectedReport.screenshotUrls?.length > 0 && (
                 <div>
-                  <label className="text-xs font-medium text-gray-500 uppercase">Resolution Action</label>
-                  <p className="text-surface-dark mt-1 capitalize">{selectedReport.resolution.action}</p>
+                  <label className="text-xs font-medium text-gray-500 uppercase">Screenshots</label>
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {selectedReport.screenshotUrls.map((url, i) => (
+                      <a key={i} href={`http://localhost:5000${url}`} target="_blank" rel="noopener noreferrer">
+                        <img src={`http://localhost:5000${url}`} alt={`screenshot-${i}`}
+                          className="w-20 h-20 rounded-xl object-cover border border-gray-200 hover:opacity-80 transition-opacity" />
+                      </a>
+                    ))}
+                  </div>
                 </div>
               )}
-              
+
+              {selectedReport.adminResponse?.message && (
+                <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-4">
+                  <label className="text-xs font-semibold text-emerald-700 uppercase">Previous Admin Response</label>
+                  <p className="text-gray-700 mt-2">{selectedReport.adminResponse.message}</p>
+                  {selectedReport.adminResponse.actionTaken && (
+                    <p className="text-xs text-gray-500 mt-1">Action: {selectedReport.adminResponse.actionTaken?.replace(/_/g, ' ')}</p>
+                  )}
+                </div>
+              )}
+
               <div>
-                <label className="text-xs font-medium text-gray-500 uppercase">Created At</label>
+                <label className="text-xs font-medium text-gray-500 uppercase">Submitted</label>
                 <p className="text-gray-500 text-sm mt-1">{new Date(selectedReport.createdAt).toLocaleString()}</p>
               </div>
             </div>
@@ -1569,7 +1754,7 @@ const AdminDashboard = () => {
                 }}
                 className="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition-all"
               >
-                Update Status
+                Resolve / Update
               </button>
               <button
                 onClick={() => setShowReportViewModal(false)}
@@ -1587,7 +1772,10 @@ const AdminDashboard = () => {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-surface-dark">Update Report Status</h3>
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-amber-500" />
+                <h3 className="text-lg font-bold text-surface-dark">Resolve Report</h3>
+              </div>
               <button
                 onClick={() => setShowReportStatusModal(false)}
                 className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
@@ -1595,49 +1783,54 @@ const AdminDashboard = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-4">
+              <p className="text-xs text-gray-500">Reporting: <span className="font-semibold text-gray-700 capitalize">{selectedReport.targetType}</span> for <span className="font-semibold text-gray-700 capitalize">{selectedReport.reason?.replace(/_/g, ' ')}</span></p>
+              <p className="text-xs text-gray-400 mt-0.5">By: {selectedReport.reporter?.fullName || 'Unknown'}</p>
+            </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1.5">Status</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Update Status</label>
                 <select
                   value={reportStatusUpdate.status}
                   onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, status: e.target.value })}
                   className={selectClass}
                 >
                   <option value="pending">Pending</option>
-                  <option value="under_review">Under Review</option>
+                  <option value="reviewing">Under Review</option>
                   <option value="resolved">Resolved</option>
                   <option value="dismissed">Dismissed</option>
                 </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1.5">Admin Notes</label>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Action Taken</label>
+                <select
+                  value={reportStatusUpdate.actionTaken}
+                  onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, actionTaken: e.target.value })}
+                  className={selectClass}
+                >
+                  <option value="">— Select action —</option>
+                  <option value="no_action">No Action</option>
+                  <option value="warning">Warning Issued</option>
+                  <option value="content_removed">Content Removed</option>
+                  <option value="user_suspended">User Suspended</option>
+                  <option value="user_banned">User Banned</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">Response Message to Student <span className="text-red-400">*</span></label>
                 <textarea
-                  value={reportStatusUpdate.adminNotes}
-                  onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, adminNotes: e.target.value })}
-                  className={inputClass}
-                  rows={3}
-                  placeholder="Add notes about this report..."
+                  value={reportStatusUpdate.message}
+                  onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, message: e.target.value })}
+                  className={`${inputClass} resize-none`}
+                  rows={4}
+                  placeholder="Explain what action was taken or why the report was dismissed. The student will see this message."
                 />
               </div>
-              
-              {reportStatusUpdate.status === 'resolved' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1.5">Resolution Action</label>
-                  <select
-                    value={reportStatusUpdate.resolutionAction}
-                    onChange={(e) => setReportStatusUpdate({ ...reportStatusUpdate, resolutionAction: e.target.value })}
-                    className={selectClass}
-                  >
-                    <option value="none">No Action</option>
-                    <option value="warning">Warning Issued</option>
-                    <option value="removed">Content Removed</option>
-                    <option value="banned">User Banned</option>
-                    <option value="restricted">User Restricted</option>
-                  </select>
-                </div>
-              )}
             </div>
             
             <div className="flex gap-3 mt-6">
@@ -1649,17 +1842,15 @@ const AdminDashboard = () => {
               </button>
               <button
                 onClick={handleReportStatusUpdate}
-                disabled={reportStatusLoading}
-                className="flex-1 py-2.5 bg-gradient-to-r from-primary-500 to-accent-500 rounded-xl text-sm font-medium text-white hover:from-primary-600 hover:to-accent-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                disabled={reportStatusLoading || !reportStatusUpdate.message?.trim()}
+                className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl text-sm font-medium text-white hover:from-amber-600 hover:to-orange-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {reportStatusLoading ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Update
-                  </>
+                  <CheckCircle className="w-4 h-4" />
                 )}
+                Save Response
               </button>
             </div>
           </div>
@@ -1798,6 +1989,8 @@ const AdminDashboard = () => {
       )}
     </div>
   );
+
+  // ─── Matching Posts Tab is inserted above in the JSX ─────────────────────────
 };
 
 export default AdminDashboard;

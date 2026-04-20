@@ -4,14 +4,11 @@ const Message = require('../models/Message');
 const FoundItem = require('../models/FoundItem');
 const LostItem = require('../models/LostItem');
 const User = require('../models/User');
+const { awardPointsForReturn } = require('./gamificationController');
 const Notification = require('../models/Notification');
+const getItemModel = (itemType) => (itemType === 'found' ? FoundItem : LostItem);
 
-// Helper to get item model by type
-const getItemModel = (itemType) => itemType === 'found' ? FoundItem : LostItem;
-
-// @desc    Create a new Claim
-// @route   POST /api/claims/:itemType/:itemId
-// @access  Private
+// ========== CREATE CLAIM ==========
 exports.createClaim = async (req, res) => {
     try {
         const { itemId, itemType } = req.params;
@@ -23,35 +20,19 @@ exports.createClaim = async (req, res) => {
 
         const ItemModel = getItemModel(itemType);
         const item = await ItemModel.findById(itemId);
-        if (!item) {
-            return res.status(404).json({ success: false, message: 'Item not found' });
-        }
-
-        // Items that are already claimed cannot accept new claims
-        if (item.status === 'Claimed') {
-            return res.status(400).json({ success: false, message: 'This item has already been claimed' });
-        }
-
-        if (item.isArchived) {
-            return res.status(400).json({ success: false, message: 'This item is archived and cannot be claimed' });
-        }
-
-        // Post owner cannot submit a claim on their own post
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+        if (item.status === 'Claimed') return res.status(400).json({ success: false, message: 'Item already claimed' });
+        if (item.isArchived) return res.status(400).json({ success: false, message: 'Item is archived' });
         if (item.postedBy.toString() === claimantId.toString()) {
-            return res.status(400).json({ success: false, message: 'You cannot claim an item you posted' });
+            return res.status(400).json({ success: false, message: 'You cannot claim your own item' });
         }
 
-        // Only one pending or approved claim can exist at a time
         const activeClaim = await Claim.findOne({ itemId, itemType, status: { $in: ['pending', 'approved'] } });
         if (activeClaim) {
-            return res.status(400).json({
-                success: false,
-                message: 'A claim is already being reviewed for this item. Please wait for the post owner to respond.'
-            });
+            return res.status(400).json({ success: false, message: 'A claim is already in progress' });
         }
 
         const proofImages = req.files ? req.files.map(f => `/uploads/${f.filename}`) : [];
-
         const claim = await Claim.create({
             itemId,
             itemType,
@@ -59,26 +40,24 @@ exports.createClaim = async (req, res) => {
             proofDescription: req.body.proofDescription,
             uniqueIdentifiers: req.body.uniqueIdentifiers || '',
             descriptionDetails: req.body.descriptionDetails || '',
-            proofImages
+            proofImages,
         });
 
-        // Track the active claim on the item
         item.activeClaim = claim._id;
         await item.save();
 
-        // Create notification for the post owner
-        const claimant = await User.findById(claimantId).select('fullName');
+        const claimantName = req.user.fullName || 'Someone';
         const notification = await Notification.create({
             recipient: item.postedBy,
             type: 'claim',
-            title: 'New Claim on Your Post',
-            message: `${claimant?.fullName || 'Someone'} submitted a claim on "${item.title}"`,
+            title: 'New Claim Received',
+            message: `${claimantName} submitted a claim for your post "${item.title}".`,
             relatedId: claim._id,
-            itemType,
-            itemId: itemId
+            relatedModel: 'Claim',
+            itemType: itemType,
+            itemId: item._id,
         });
 
-        // Push real-time notification via Socket.IO
         const io = req.app.get('io');
         if (io) {
             io.to(item.postedBy.toString()).emit('new_notification', notification);
@@ -91,165 +70,114 @@ exports.createClaim = async (req, res) => {
     }
 };
 
-// @desc    Get all claims for a specific item (for the post owner to review)
-// @route   GET /api/claims/:itemType/:itemId
-// @access  Private
+// ========== GET CLAIMS FOR ITEM ==========
 exports.getClaimsForItem = async (req, res) => {
     try {
         const { itemId, itemType } = req.params;
         const ItemModel = getItemModel(itemType);
         const item = await ItemModel.findById(itemId);
-
-        if (!item) {
-            return res.status(404).json({ success: false, message: 'Item not found' });
-        }
-
+        if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
         if (item.postedBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: 'Only the post owner can view claims for this item' });
+            return res.status(403).json({ success: false, message: 'Only post owner can view claims' });
         }
-
-        const claims = await Claim.find({ itemId, itemType })
-            .populate('claimantId', 'fullName studentId email')
-            .sort({ createdAt: -1 });
-
+        const claims = await Claim.find({ itemId, itemType }).populate('claimantId', 'fullName studentId email').sort({ createdAt: -1 });
         res.status(200).json({ success: true, data: claims });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Get claims submitted by the current user
-// @route   GET /api/claims/mine
-// @access  Private
+// ========== GET MY CLAIMS (SUBMITTED) ==========
 exports.getMyClaims = async (req, res) => {
     try {
-        const claims = await Claim.find({ claimantId: req.user._id })
-            .sort({ createdAt: -1 });
-
-        // Populate each claim with item details
+        const claims = await Claim.find({ claimantId: req.user._id }).sort({ createdAt: -1 });
         const populated = await Promise.all(claims.map(async (claim) => {
             const ItemModel = getItemModel(claim.itemType);
             const item = await ItemModel.findById(claim.itemId).populate('postedBy', 'fullName email profilePhoto');
             return { ...claim.toObject(), item };
         }));
-
         res.status(200).json({ success: true, data: populated });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Get claims received by the current user (claims on their posts)
-// @route   GET /api/claims/received
-// @access  Private
+// ========== GET RECEIVED CLAIMS (ON USER'S POSTS) ==========
 exports.getReceivedClaims = async (req, res) => {
     try {
-        // Find all items posted by this user, then find claims on those items
         const [myFoundIds, myLostIds] = await Promise.all([
             FoundItem.find({ postedBy: req.user._id }).distinct('_id'),
             LostItem.find({ postedBy: req.user._id }).distinct('_id'),
         ]);
-
         const claims = await Claim.find({
             $or: [
                 { itemId: { $in: myFoundIds }, itemType: 'found' },
                 { itemId: { $in: myLostIds }, itemType: 'lost' },
-            ]
+            ],
         }).populate('claimantId', 'fullName studentId email').sort({ createdAt: -1 });
-
-        // Enrich each claim with item details
         const populated = await Promise.all(claims.map(async (claim) => {
             const ItemModel = getItemModel(claim.itemType);
             const item = await ItemModel.findById(claim.itemId).populate('postedBy', 'fullName email profilePhoto');
             return { ...claim.toObject(), item };
         }));
-
         res.status(200).json({ success: true, data: populated });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Get a single claim
-// @route   GET /api/claims/:id
-// @access  Private
+// ========== GET SINGLE CLAIM ==========
 exports.getClaimById = async (req, res) => {
     try {
-        const claim = await Claim.findById(req.params.id)
-            .populate('claimantId', 'fullName studentId email')
-            .populate('chatId');
-
-        if (!claim) {
-            return res.status(404).json({ success: false, message: 'Claim not found' });
-        }
-
-        // Only the claimant or the post owner can view a claim
+        const claim = await Claim.findById(req.params.id).populate('claimantId', 'fullName studentId email').populate('chatId');
+        if (!claim) return res.status(404).json({ success: false, message: 'Claim not found' });
         const ItemModel = getItemModel(claim.itemType);
         const item = await ItemModel.findById(claim.itemId);
-
-        if (
-            claim.claimantId._id.toString() !== req.user._id.toString() &&
-            item?.postedBy.toString() !== req.user._id.toString()
-        ) {
+        if (claim.claimantId._id.toString() !== req.user._id.toString() && item?.postedBy.toString() !== req.user._id.toString()) {
             return res.status(403).json({ success: false, message: 'Not authorized' });
         }
-
         res.status(200).json({ success: true, data: { ...claim.toObject(), item } });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Approve a claim (post owner only)
-// @route   PUT /api/claims/:id/approve
-// @access  Private
+// ========== APPROVE CLAIM ==========
 exports.approveClaim = async (req, res) => {
     try {
         const claim = await Claim.findById(req.params.id);
-        if (!claim) {
-            return res.status(404).json({ success: false, message: 'Claim not found' });
-        }
-
+        if (!claim) return res.status(404).json({ success: false, message: 'Claim not found' });
         const ItemModel = getItemModel(claim.itemType);
         const item = await ItemModel.findById(claim.itemId);
-
         if (!item || item.postedBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: 'Only the post owner can approve claims' });
+            return res.status(403).json({ success: false, message: 'Only post owner can approve' });
         }
-
-        if (claim.status !== 'pending') {
-            return res.status(400).json({ success: false, message: 'Only pending claims can be approved' });
-        }
+        if (claim.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending claims can be approved' });
 
         claim.status = 'approved';
         await claim.save();
 
-        // Reject all other pending claims for this item
         await Claim.updateMany(
             { itemId: claim.itemId, itemType: claim.itemType, _id: { $ne: claim._id }, status: 'pending' },
             { status: 'rejected' }
         );
 
-        // Auto-create a chat between the two parties
         const chat = await Chat.create({
             claimId: claim._id,
             participants: [item.postedBy, claim.claimantId],
             itemId: claim.itemId,
             itemType: claim.itemType,
-            status: 'ACTIVE'
+            status: 'ACTIVE',
         });
-
-        // Save chatId back to the claim
         claim.chatId = chat._id;
         await claim.save();
 
-        // System message to kick off the conversation
         const action = claim.itemType === 'found' ? 'returning' : 'retrieving';
         await Message.create({
             chatId: chat._id,
             senderId: item.postedBy,
             content: `✅ Claim approved! You can now coordinate ${action} the item here.`,
-            type: 'SYSTEM'
+            type: 'SYSTEM',
         });
 
         // Notify the claimant that their claim was approved
@@ -267,121 +195,121 @@ exports.approveClaim = async (req, res) => {
             io.to(claim.claimantId.toString()).emit('new_notification', notification);
         }
 
-        res.status(200).json({
-            success: true,
-            message: 'Claim approved and chat created',
-            data: claim,
-            chatId: chat._id
-        });
+        res.status(200).json({ success: true, message: 'Claim approved', data: claim, chatId: chat._id });
     } catch (error) {
         console.error('approveClaim error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Reject a claim (post owner only)
-// @route   PUT /api/claims/:id/reject
-// @access  Private
+// ========== REJECT CLAIM ==========
 exports.rejectClaim = async (req, res) => {
     try {
         const claim = await Claim.findById(req.params.id);
-        if (!claim) {
-            return res.status(404).json({ success: false, message: 'Claim not found' });
-        }
-
+        if (!claim) return res.status(404).json({ success: false, message: 'Claim not found' });
         const ItemModel = getItemModel(claim.itemType);
         const item = await ItemModel.findById(claim.itemId);
-
         if (!item || item.postedBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: 'Only the post owner can reject claims' });
+            return res.status(403).json({ success: false, message: 'Only post owner can reject' });
         }
-
-        if (claim.status !== 'pending') {
-            return res.status(400).json({ success: false, message: 'Only pending claims can be rejected' });
-        }
+        if (claim.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending claims can be rejected' });
 
         claim.status = 'rejected';
         claim.rejectionReason = req.body.reason || '';
         await claim.save();
-
-        // Clear the activeClaim on the item so new claims can be submitted
         item.activeClaim = null;
         await item.save();
-
         res.status(200).json({ success: true, message: 'Claim rejected', data: claim });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
 
-// @desc    Confirm return/retrieval (both parties must confirm)
-// @route   POST /api/claims/:id/confirm-return
-// @access  Private
+// ========== CONFIRM RETURN (BOTH PARTIES) – FINAL CORRECTED VERSION ==========
 exports.confirmReturn = async (req, res) => {
     try {
         const claim = await Claim.findById(req.params.id);
-        if (!claim) {
-            return res.status(404).json({ success: false, message: 'Claim not found' });
-        }
-
+        if (!claim) return res.status(404).json({ success: false, message: 'Claim not found' });
         if (claim.status !== 'approved') {
             return res.status(400).json({ success: false, message: 'Only approved claims can be confirmed' });
         }
 
         const ItemModel = getItemModel(claim.itemType);
         const item = await ItemModel.findById(claim.itemId);
-
         const userId = req.user._id.toString();
         const isOwner = item?.postedBy.toString() === userId;
         const isClaimant = claim.claimantId.toString() === userId;
-
         if (!isOwner && !isClaimant) {
             return res.status(403).json({ success: false, message: 'Not authorized' });
         }
 
+        // Record the confirmation
         if (isOwner) claim.ownerConfirmed = true;
         if (isClaimant) claim.claimantConfirmed = true;
 
-        // If both have confirmed, finalize
-        if (claim.ownerConfirmed && claim.claimantConfirmed) {
+        let bothConfirmed = claim.ownerConfirmed && claim.claimantConfirmed;
+
+        if (bothConfirmed) {
+            // Finalize claim
             claim.status = 'claimed';
             claim.resolvedAt = new Date();
-
             if (item) {
                 item.status = 'Claimed';
                 item.claimedBy = claim.claimantId;
-                item.isArchived = true; // auto-archive so it leaves public board
+                item.isArchived = true;
                 await item.save();
             }
 
-            // Award 100 points to the finder (person who physically held & returned the item)
-            // Found item: post owner IS the finder  |  Lost item: claimant IS the finder
-            const finderId = claim.itemType === 'found'
-                ? item.postedBy   // finder posted the found item
-                : claim.claimantId; // finder submitted a claim on the lost item
+            // Award points (this also sets claim.pointsAwarded = true and saves the claim)
+            const ownerId = item.postedBy.toString();
+            const finderId = claim.claimantId.toString();
+            console.log(`Awarding points for claim ${claim._id}, owner ${ownerId}, finder ${finderId}`);
+            const awardResult = await awardPointsForReturn(claim._id, ownerId, finderId);
+            if (!awardResult.success) {
+                console.error('Points award failed:', awardResult.message);
+                // Still continue – claim is already resolved, but we log the error
+            } else {
+                console.log('Points awarded successfully');
+                // Re-fetch the claim to get the updated pointsAwarded flag
+                const updatedClaim = await Claim.findById(claim._id);
+                if (updatedClaim) {
+                    claim.pointsAwarded = updatedClaim.pointsAwarded;
+                    claim.pointsAwardedAt = updatedClaim.pointsAwardedAt;
+                }
 
-            await User.findByIdAndUpdate(finderId, { $inc: { points: 100 } });
+                if (awardResult.notifications && awardResult.notifications.length > 0) {
+                    const io = req.app.get('io');
+                    if (io) {
+                        awardResult.notifications.forEach(notif => {
+                            io.to(notif.recipient.toString()).emit('new_notification', notif);
+                        });
+                    }
+                }
+            }
 
-            // Lock the chat
+            // Lock chat
             if (claim.chatId) {
                 await Chat.findByIdAndUpdate(claim.chatId, { status: 'LOCKED', lockedAt: new Date() });
                 await Message.create({
                     chatId: claim.chatId,
                     senderId: req.user._id,
-                    content: '🎉 Both parties confirmed! The item has been successfully returned. The finder has been awarded 100 points for their contribution. This chat is now closed.',
-                    type: 'SYSTEM'
+                    content: '🎉 Both parties confirmed! The item has been successfully returned. This chat is now closed.',
+                    type: 'SYSTEM',
                 });
             }
+            // Do NOT save the claim here – awardPointsForReturn already saved it.
+        } else {
+            // Only one party confirmed so far – save the claim
+            await claim.save();
+            console.log(`First confirmation saved for claim ${claim._id}`);
         }
 
-        await claim.save();
-
-        const bothConfirmed = claim.ownerConfirmed && claim.claimantConfirmed;
+        // Send response using the updated claim object
         res.status(200).json({
             success: true,
             message: bothConfirmed ? 'Item marked as claimed!' : 'Confirmation recorded. Waiting for the other party.',
             data: claim,
-            bothConfirmed
+            bothConfirmed,
         });
     } catch (error) {
         console.error('confirmReturn error:', error);

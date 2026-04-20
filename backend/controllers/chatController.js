@@ -13,24 +13,17 @@ exports.getMyChats = async (req, res) => {
             .sort({ lastMessageAt: -1 });
 
         // Enrich each chat with item details
-        const enriched = await Promise.all(
-            chats.map(async (chat) => {
-                const ItemModel = chat.itemType === 'found' ? FoundItem : LostItem;
-
-                const item = await ItemModel.findById(chat.itemId)
-                    .select('title images status postedBy');
-
-                const otherUser = chat.participants.find(
-                    (p) => p._id.toString() !== req.user._id.toString()
-                );
-
-                return {
-                    ...chat.toObject(),
-                    item,
-                    otherUser,
-                };
-            })
-        );
+        const enriched = await Promise.all(chats.map(async (chat) => {
+            const ItemModel = chat.itemType === 'found' ? FoundItem : LostItem;
+            const item = await ItemModel.findById(chat.itemId)
+                .select('title images status postedBy');
+            const otherUser = chat.participants.find(p => p._id.toString() !== req.user._id.toString());
+            return {
+                ...chat.toObject(),
+                item,
+                otherUser
+            };
+        }));
 
         res.status(200).json({ success: true, data: enriched });
     } catch (error) {
@@ -66,13 +59,9 @@ exports.getChatById = async (req, res) => {
         }
 
         const ItemModel = chat.itemType === 'found' ? FoundItem : LostItem;
-
         const item = await ItemModel.findById(chat.itemId)
             .select('title images status postedBy');
-
-        const otherUser = chat.participants.find(
-            (p) => p._id.toString() !== req.user._id.toString()
-        );
+        const otherUser = chat.participants.find(p => p._id.toString() !== req.user._id.toString());
 
         // Reset unread count for this user
         const unreadCount = chat.unreadCount || new Map();
