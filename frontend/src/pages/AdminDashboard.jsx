@@ -27,11 +27,14 @@ import {
   Filter,
   RefreshCw,
   Flag, // Add Flag icon for reports
-  Eye,
-  Check,
   XCircle,
-  Clock as ClockIcon
+  Clock as ClockIcon,
+  Bell,
+  CheckCheck,
+  Check
 } from "lucide-react";
+import { useNotifications } from "../context/NotificationContext";
+import { formatTimeAgo } from "../utils/dateUtils";
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
@@ -125,6 +128,16 @@ const AdminDashboard = () => {
     isActive: true,
     points: 0,
   });
+
+  const { 
+    notifications, 
+    unreadCount: notifUnreadCount, 
+    markAsRead, 
+    markAllAsRead, 
+    deleteNotification, 
+    deleteAllNotifications,
+    fetchNotifications 
+  } = useNotifications();
 
   useEffect(() => {
     fetchUsers();
@@ -482,6 +495,20 @@ const AdminDashboard = () => {
     navigate("/");
   };
 
+  const handleNotifClick = async (notif) => {
+    if (!notif.isRead) {
+      await markAsRead(notif._id);
+    }
+
+    if (notif.type === 'claim') {
+      setActiveTab('users'); // Admins might want to see users or reports
+    } else if (notif.type === 'message') {
+      // Admin might not have a dedicated message view like students yet
+      // but let's keep it consistent if they do.
+    }
+    setActiveTab('notifications');
+  };
+
   const sidebarItems = [
     {
       id: "overview",
@@ -490,6 +517,7 @@ const AdminDashboard = () => {
     },
     { id: "users", label: "Users", icon: <Users className="w-5 h-5" /> },
     { id: "reports", label: "Reports", icon: <Flag className="w-5 h-5" /> },
+    { id: "notifications", label: "Notifications", icon: <Bell className="w-5 h-5" /> },
     { id: "notices", label: "Notices", icon: <Megaphone className="w-5 h-5" /> },
   ];
 
@@ -589,6 +617,11 @@ const AdminDashboard = () => {
               >
                 {item.icon}
                 {item.label}
+                {item.id === 'notifications' && notifUnreadCount > 0 && (
+                  <span className="ml-auto bg-primary-500 text-white text-xs px-2 py-0.5 rounded-full">
+                    {notifUnreadCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -617,6 +650,11 @@ const AdminDashboard = () => {
               >
                 {item.icon}
                 {item.label}
+                {item.id === 'notifications' && notifUnreadCount > 0 && (
+                  <span className="ml-1 bg-primary-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                    {notifUnreadCount}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -982,7 +1020,117 @@ const AdminDashboard = () => {
             </>
           )}
 
-          {/* Notices Tab */}
+
+          {/* Notifications Tab */}
+          {activeTab === 'notifications' && (
+            <>
+              <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-surface-dark flex items-center gap-2">
+                    <Bell className="w-6 h-6 text-primary-600" />
+                    Notifications
+                  </h1>
+                  <p className="text-gray-500 text-sm mt-1">
+                    Your personal notifications and updates
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {notifUnreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="px-4 py-2 bg-primary-50 text-primary-600 border border-primary-200/60 rounded-xl text-sm font-medium hover:bg-primary-100 transition-all flex items-center gap-2"
+                    >
+                      <CheckCheck className="w-4 h-4" />
+                      Mark all read
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to clear all notifications?')) {
+                          deleteAllNotifications();
+                        }
+                      }}
+                      className="px-4 py-2 bg-gray-50 text-gray-600 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-100 transition-all flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Clear all
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {notifications.length === 0 ? (
+                  <div className="bg-white border border-gray-200/60 rounded-2xl p-12 text-center">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Bell className="w-8 h-8 text-gray-300" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-surface-dark">No notifications yet</h3>
+                    <p className="text-gray-400 max-w-xs mx-auto mt-1">
+                      Everything is quiet for now.
+                    </p>
+                  </div>
+                ) : (
+                  notifications.map((notif) => (
+                    <div
+                      key={notif._id}
+                      className={`group bg-white border rounded-2xl p-4 transition-all hover:shadow-md hover:border-primary-200/60 flex items-start gap-4 ${!notif.isRead ? 'border-primary-100 bg-primary-50/10' : 'border-gray-200/60'
+                        }`}
+                    >
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${notif.type === 'claim' ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
+                        }`}>
+                        {notif.type === 'claim' ? <FileText className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className={`text-sm leading-tight truncate ${!notif.isRead ? 'font-bold text-surface-dark' : 'font-medium text-gray-700'}`}>
+                            {notif.title}
+                          </h4>
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                            {formatTimeAgo(notif.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                          {notif.message}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {!notif.isRead && (
+                          <button
+                            onClick={() => markAsRead(notif._id)}
+                            className="p-2 text-primary-500 hover:bg-primary-50 rounded-lg transition-all"
+                            title="Mark as read"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteNotification(notif._id)}
+                          className="p-2 text-gray-400 hover:text-danger-500 hover:bg-danger-50 rounded-lg transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleNotifClick(notif)}
+                          className="p-2 text-gray-400 hover:text-primary-500 hover:bg-gray-50 rounded-lg transition-all"
+                          title="View details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {!notif.isRead && (
+                        <div className="w-2 h-2 rounded-full bg-primary-500 mt-2 shrink-0 group-hover:hidden" />
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
           {activeTab === "notices" && (
             <>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">

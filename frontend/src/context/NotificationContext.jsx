@@ -24,7 +24,7 @@ export const NotificationProvider = ({ children }) => {
 
     const fetchNotifications = useCallback(async () => {
         try {
-            const { data } = await API.get('/notifications?limit=20');
+            const { data } = await API.get('/notifications?limit=50');
             setNotifications(data.data);
         } catch (error) {
             console.error('Failed to fetch notifications:', error);
@@ -53,10 +53,30 @@ export const NotificationProvider = ({ children }) => {
         }
     }, []);
 
+    const deleteNotification = useCallback(async (id) => {
+        try {
+            await API.delete(`/notifications/${id}`);
+            setNotifications(prev => prev.filter(n => n._id !== id));
+            // Re-fetch count to be accurate
+            fetchUnreadCount();
+        } catch (error) {
+            console.error('Failed to delete notification:', error);
+        }
+    }, [fetchUnreadCount]);
+
+    const deleteAllNotifications = useCallback(async () => {
+        try {
+            await API.delete('/notifications');
+            setNotifications([]);
+            setUnreadCount(0);
+        } catch (error) {
+            console.error('Failed to clear all notifications:', error);
+        }
+    }, []);
+
     // Fetch on login
     useEffect(() => {
         if (user?._id) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             fetchUnreadCount();
             fetchNotifications();
         } else {
@@ -73,7 +93,7 @@ export const NotificationProvider = ({ children }) => {
         if (!socket) return;
 
         const handleNewNotification = (notification) => {
-            setNotifications(prev => [notification, ...prev].slice(0, 20));
+            setNotifications(prev => [notification, ...prev].slice(0, 50));
             setUnreadCount(prev => prev + 1);
         };
 
@@ -92,7 +112,9 @@ export const NotificationProvider = ({ children }) => {
                 fetchNotifications,
                 fetchUnreadCount,
                 markAsRead,
-                markAllAsRead
+                markAllAsRead,
+                deleteNotification,
+                deleteAllNotifications
             }}
         >
             {children}
