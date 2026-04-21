@@ -1149,13 +1149,6 @@ const AdminDashboard = () => {
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleNotifClick(notif); }}
-                          className="p-2 text-gray-400 hover:text-primary-500 hover:bg-gray-50 rounded-lg transition-all"
-                          title="View details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
                       </div>
                       {!notif.isRead && (
                         <div className="w-2 h-2 rounded-full bg-primary-500 mt-2 shrink-0 group-hover:hidden" />
