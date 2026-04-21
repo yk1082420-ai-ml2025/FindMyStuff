@@ -67,6 +67,9 @@ exports.sendMessage = async (req, res) => {
         for (const pId of chat.participants) {
             if (pId.toString() === req.user._id.toString()) continue;
 
+            const recipientUser = await require('../models/User').findById(pId).select('notificationsEnabled');
+            if (recipientUser && recipientUser.notificationsEnabled === false) continue;
+
             // Only create if there's no existing unread message notification for this chat
             const existing = await Notification.findOne({
                 recipient: pId,

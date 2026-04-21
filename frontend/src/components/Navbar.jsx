@@ -39,7 +39,7 @@ const NotificationDropdown = ({ notifications, unreadCount, onNotifClick, onMark
                     <p className="text-xs text-gray-300 mt-0.5">We&apos;ll notify you when something happens</p>
                 </div>
             ) : (
-                notifications.map((notif) => (
+                notifications.slice(0, 10).map((notif) => (
                     <button
                         key={notif._id}
                         onClick={() => onNotifClick(notif)}

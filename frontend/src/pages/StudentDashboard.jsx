@@ -28,9 +28,12 @@ import {
     Eye,
     ClipboardList,
     Flag,
+    Bell,
+    CheckCheck,
+    Check,
+    BellOff,
     TrendingUp, 
-     Award,
-
+    Award,
 } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
 import { formatTimeAgo } from '../utils/dateUtils';
@@ -198,6 +201,23 @@ const fetchProfile = async () => {
         } else if (notif.type === 'message') {
             setSelectedChat({ _id: notif.relatedId });
             setActiveTab('messages');
+        }
+    };
+
+    const toggleNotifications = async () => {
+        try {
+            const newStatus = profile?.notificationsEnabled !== false ? false : true;
+            setProfile(prev => ({ ...prev, notificationsEnabled: newStatus }));
+            const { data } = await API.put('/users/profile', { notificationsEnabled: newStatus });
+            setProfile(data);
+            if (updateUser) updateUser(data);
+            setMessage({ text: `Notifications ${newStatus ? 'enabled' : 'disabled'} successfully!`, type: 'success' });
+            setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+        } catch (error) {
+            setMessage({ text: 'Failed to update notification settings', type: 'error' });
+            setTimeout(() => setMessage({ text: '', type: '' }), 3000);
+            // revert
+            setProfile(prev => ({ ...prev, notificationsEnabled: prev?.notificationsEnabled !== false ? false : true }));
         }
     };
 
@@ -841,6 +861,23 @@ const fetchProfile = async () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-3 px-3 py-2 border border-gray-200/60 rounded-xl bg-white shadow-sm hidden sm:flex">
+                                        {profile?.notificationsEnabled !== false ? 
+                                            <Bell className="w-4 h-4 text-primary-500" /> : 
+                                            <BellOff className="w-4 h-4 text-gray-400" />
+                                        }
+                                        <span className="text-sm font-medium text-gray-700 block min-w-[60px]">
+                                            {profile?.notificationsEnabled !== false ? 'Enabled' : 'Paused'}
+                                        </span>
+                                        <button
+                                            onClick={toggleNotifications}
+                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${profile?.notificationsEnabled !== false ? 'bg-primary-600' : 'bg-gray-300'}`}
+                                        >
+                                            <span 
+                                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${profile?.notificationsEnabled !== false ? 'translate-x-4' : 'translate-x-0'}`} 
+                                            />
+                                        </button>
+                                    </div>
                                     {notifUnreadCount > 0 && (
                                         <button
                                             onClick={markAllAsRead}
@@ -881,7 +918,8 @@ const fetchProfile = async () => {
                                     notifications.map((notif) => (
                                         <div
                                             key={notif._id}
-                                            className={`group bg-white border rounded-2xl p-4 transition-all hover:shadow-md hover:border-primary-200/60 flex items-start gap-4 ${
+                                            onClick={() => handleNotifClick(notif)}
+                                            className={`group cursor-pointer bg-white border rounded-2xl p-4 transition-all hover:shadow-md hover:border-primary-200/60 flex items-start gap-4 ${
                                                 !notif.isRead ? 'border-primary-100 bg-primary-50/10' : 'border-gray-200/60'
                                             }`}
                                         >
@@ -908,7 +946,7 @@ const fetchProfile = async () => {
                                             <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 {!notif.isRead && (
                                                     <button
-                                                        onClick={() => markAsRead(notif._id)}
+                                                        onClick={(e) => { e.stopPropagation(); markAsRead(notif._id); }}
                                                         className="p-2 text-primary-500 hover:bg-primary-50 rounded-lg transition-all"
                                                         title="Mark as read"
                                                     >
@@ -916,18 +954,11 @@ const fetchProfile = async () => {
                                                     </button>
                                                 )}
                                                 <button
-                                                    onClick={() => deleteNotification(notif._id)}
+                                                    onClick={(e) => { e.stopPropagation(); deleteNotification(notif._id); }}
                                                     className="p-2 text-gray-400 hover:text-danger-500 hover:bg-danger-50 rounded-lg transition-all"
                                                     title="Delete"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleNotifClick(notif)}
-                                                    className="p-2 text-gray-400 hover:text-primary-500 hover:bg-gray-50 rounded-lg transition-all"
-                                                    title="View details"
-                                                >
-                                                    <Eye className="w-4 h-4" />
                                                 </button>
                                             </div>
                                             {!notif.isRead && (

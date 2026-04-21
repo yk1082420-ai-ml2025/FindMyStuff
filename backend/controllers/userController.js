@@ -28,7 +28,7 @@ const updateProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const { fullName, email, password, profilePhoto } = req.body;
+    const { fullName, email, password, profilePhoto, notificationsEnabled } = req.body;
 
     if (fullName) user.fullName = fullName;
     if (email) user.email = email;
@@ -37,6 +37,7 @@ const updateProfile = async (req, res) => {
       user.markModified("passwordHash");
     }
     if (profilePhoto !== undefined) user.profilePhoto = profilePhoto;
+    if (notificationsEnabled !== undefined) user.notificationsEnabled = notificationsEnabled;
 
     const updatedUser = await user.save();
     res.json(updatedUser);

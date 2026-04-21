@@ -29,6 +29,12 @@ import {
   Flag, // Add Flag icon for reports
   XCircle,
   Clock as ClockIcon,
+  Bell,
+  CheckCheck,
+  Check,
+  FileText,
+  MessageCircle,
+  BellOff,
   GitMerge,
   Zap,
   ArrowLeftRight,
@@ -38,7 +44,7 @@ import { useNotifications } from "../context/NotificationContext";
 import { formatTimeAgo } from "../utils/dateUtils";
 
 const AdminDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [users, setUsers] = useState([]);
@@ -593,6 +599,19 @@ const AdminDashboard = () => {
     setActiveTab('notifications');
   };
 
+  const toggleNotifications = async () => {
+    try {
+      const newStatus = user?.notificationsEnabled !== false ? false : true;
+      const { data } = await API.put("/users/profile", { notificationsEnabled: newStatus });
+      if (updateUser) updateUser(data);
+      setMessage({ text: `Notifications ${newStatus ? 'enabled' : 'disabled'} successfully!`, type: "success" });
+      setTimeout(() => setMessage({ text: "", type: "" }), 3000);
+    } catch (error) {
+      setMessage({ text: "Failed to update notification settings", type: "error" });
+      setTimeout(() => setMessage({ text: "", type: "" }), 3000);
+    }
+  };
+
   const sidebarItems = [
     { id: "overview", label: "Overview", icon: <LayoutDashboard className="w-5 h-5" /> },
     { id: "users", label: "Users", icon: <Users className="w-5 h-5" /> },
@@ -1138,6 +1157,298 @@ const AdminDashboard = () => {
                     <p className={`text-3xl font-bold ${s.text}`}>{s.value}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* Status filter tabs */}
+              <div className="flex gap-2 mb-5">
+                {['pending', 'confirmed', 'dismissed'].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setMatchStatusFilter(s)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium capitalize transition-all border ${matchStatusFilter === s
+                      ? 'bg-violet-500 text-white border-violet-500 shadow-sm'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-violet-300 hover:text-violet-600'}`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              {/* Match list */}
+              {matchesLoading ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="w-10 h-10 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : matches.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-24 bg-white border border-gray-200 rounded-2xl">
+                  <GitMerge className="w-14 h-14 text-gray-200 mb-4" />
+                  <p className="text-gray-400 font-medium">No {matchStatusFilter} matches</p>
+                  <p className="text-xs text-gray-400 mt-1">Click "Run Matching" to scan for potential pairs</p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {matches.map((match, idx) => {
+                    const lost = match.lostItem;
+                    const found = match.foundItem;
+                    const isActing = matchActionLoading === match._id;
+                    const scoreLabel = `${match.score}/4`;
+                    const confidencePct = Math.round((match.score / 4) * 100);
+                    const confidenceColor = match.score === 4
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                      : 'bg-amber-100 text-amber-700 border-amber-300';
+
+                    return (
+                      <div key={match._id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        {/* Top bar */}
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-gray-700">Match #{String(idx + 1).padStart(4, '0')}</span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${confidenceColor}`}>
+                              {scoreLabel} · {confidencePct}% Confidence
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400">{new Date(match.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+
+                        {/* Side-by-side posts */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100">
+                          {/* LOST POST */}
+                          <div className="p-5">
+                            <div className="flex items-center gap-1.5 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-red-500" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-red-500">Lost Post</span>
+                            </div>
+                            <div className="flex items-start gap-3 mb-4">
+                              {lost?.images?.[0] ? (
+                                <img src={`http://localhost:5000${lost.images[0]}`} alt={lost?.title}
+                                  className="w-14 h-14 rounded-xl object-cover border border-gray-100 shrink-0" />
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                                  <Package className="w-6 h-6 text-red-200" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-gray-800 truncate">{lost?.title || '—'}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">by {lost?.postedBy?.fullName || 'Unknown'} · {lost?.postedBy?.studentId || ''}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1 text-xs text-gray-500">
+                              <p><span className="font-medium text-gray-600">Category:</span> {lost?.category || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Location:</span> {lost?.lastSeenLocation || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Date Lost:</span> {lost?.dateLost ? new Date(lost.dateLost).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                              {lost?.color && <p><span className="font-medium text-gray-600">Color:</span> {lost.color}</p>}
+                              {lost?.brand && <p><span className="font-medium text-gray-600">Brand:</span> {lost.brand}</p>}
+                            </div>
+                          </div>
+
+                          {/* FOUND POST */}
+                          <div className="p-5 relative">
+                            {/* Swap icon in centre on md+ */}
+                            <div className="hidden md:flex absolute -left-5 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-violet-500 text-white items-center justify-center shadow-lg shadow-violet-500/30">
+                              <ArrowLeftRight className="w-4 h-4" />
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Found Post</span>
+                            </div>
+                            <div className="flex items-start gap-3 mb-4">
+                              {found?.images?.[0] ? (
+                                <img src={`http://localhost:5000${found.images[0]}`} alt={found?.title}
+                                  className="w-14 h-14 rounded-xl object-cover border border-gray-100 shrink-0" />
+                              ) : (
+                                <div className="w-14 h-14 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                                  <Package className="w-6 h-6 text-emerald-200" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="font-semibold text-sm text-gray-800 truncate">{found?.title || '—'}</p>
+                                <p className="text-xs text-gray-400 mt-0.5">by {found?.postedBy?.fullName || 'Unknown'} · {found?.postedBy?.studentId || ''}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-1 text-xs text-gray-500">
+                              <p><span className="font-medium text-gray-600">Category:</span> {found?.category || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Location:</span> {found?.foundLocation || '—'}</p>
+                              <p><span className="font-medium text-gray-600">Date Found:</span> {found?.dateFound ? new Date(found.dateFound).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
+                              {found?.color && <p><span className="font-medium text-gray-600">Color:</span> {found.color}</p>}
+                              {found?.brand && <p><span className="font-medium text-gray-600">Brand:</span> {found.brand}</p>}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Matched On tags + Actions */}
+                        <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50/40">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            {/* Matched on tags */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Matched on:</span>
+                              {match.matchedOn?.map((attr) => (
+                                <span key={attr} className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-xs font-medium">
+                                  <Check className="w-3 h-3" /> {attr}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Actions */}
+                            {matchStatusFilter === 'pending' && (
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  onClick={() => handleConfirmMatch(match._id)}
+                                  disabled={isActing}
+                                  className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium transition-all shadow-sm shadow-emerald-500/20 disabled:opacity-60"
+                                >
+                                  {isActing ? <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                  Confirm Match &amp; Notify Both
+                                </button>
+                                <button
+                                  onClick={() => handleDismissMatch(match._id)}
+                                  disabled={isActing}
+                                  className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-500 hover:bg-red-50 rounded-xl text-sm font-medium transition-all disabled:opacity-60"
+                                >
+                                  <X className="w-3.5 h-3.5" /> Dismiss
+                                </button>
+                              </div>
+                            )}
+                            {matchStatusFilter === 'confirmed' && (
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full">
+                                <CheckCircle className="w-3.5 h-3.5" /> Confirmed — Both users notified
+                              </span>
+                            )}
+                            {matchStatusFilter === 'dismissed' && (
+                              <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-full">
+                                <XCircle className="w-3.5 h-3.5" /> Dismissed
+                              </span>
+                            )}
+                          </div>
+                          {matchStatusFilter === 'pending' && (
+                            <p className="text-[10px] text-gray-400 mt-2">Admin review required before notification is sent</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Notifications Tab */}
+          {activeTab === 'notifications' && (
+            <>
+              <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-surface-dark flex items-center gap-2">
+                    <Bell className="w-6 h-6 text-primary-600" />
+                    Notifications
+                  </h1>
+                  <p className="text-gray-500 text-sm mt-1">
+                    Your personal notifications and updates
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3 px-3 py-2 border border-gray-200/60 rounded-xl bg-white shadow-sm hidden sm:flex">
+                    {user?.notificationsEnabled !== false ? 
+                        <Bell className="w-4 h-4 text-primary-500" /> : 
+                        <BellOff className="w-4 h-4 text-gray-400" />
+                    }
+                    <span className="text-sm font-medium text-gray-700 block min-w-[60px]">
+                        {user?.notificationsEnabled !== false ? 'Enabled' : 'Paused'}
+                    </span>
+                    <button
+                        onClick={toggleNotifications}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${user?.notificationsEnabled !== false ? 'bg-primary-600' : 'bg-gray-300'}`}
+                    >
+                        <span 
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${user?.notificationsEnabled !== false ? 'translate-x-4' : 'translate-x-0'}`} 
+                        />
+                    </button>
+                  </div>
+                  {notifUnreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="px-4 py-2 bg-primary-50 text-primary-600 border border-primary-200/60 rounded-xl text-sm font-medium hover:bg-primary-100 transition-all flex items-center gap-2"
+                    >
+                      <CheckCheck className="w-4 h-4" />
+                      Mark all read
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to clear all notifications?')) {
+                          deleteAllNotifications();
+                        }
+                      }}
+                      className="px-4 py-2 bg-gray-50 text-gray-600 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-100 transition-all flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Clear all
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {notifications.length === 0 ? (
+                  <div className="bg-white border border-gray-200/60 rounded-2xl p-12 text-center">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Bell className="w-8 h-8 text-gray-300" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-surface-dark">No notifications yet</h3>
+                    <p className="text-gray-400 max-w-xs mx-auto mt-1">
+                      Everything is quiet for now.
+                    </p>
+                  </div>
+                ) : (
+                  notifications.map((notif) => (
+                    <div
+                      key={notif._id}
+                      onClick={() => handleNotifClick(notif)}
+                      className={`group cursor-pointer bg-white border rounded-2xl p-4 transition-all hover:shadow-md hover:border-primary-200/60 flex items-start gap-4 ${!notif.isRead ? 'border-primary-100 bg-primary-50/10' : 'border-gray-200/60'
+                        }`}
+                    >
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${notif.type === 'claim' ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'
+                        }`}>
+                        {notif.type === 'claim' ? <FileText className="w-5 h-5" /> : <MessageCircle className="w-5 h-5" />}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className={`text-sm leading-tight truncate ${!notif.isRead ? 'font-bold text-surface-dark' : 'font-medium text-gray-700'}`}>
+                            {notif.title}
+                          </h4>
+                          <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                            {formatTimeAgo(notif.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                          {notif.message}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {!notif.isRead && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); markAsRead(notif._id); }}
+                            className="p-2 text-primary-500 hover:bg-primary-50 rounded-lg transition-all"
+                            title="Mark as read"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteNotification(notif._id); }}
+                          className="p-2 text-gray-400 hover:text-danger-500 hover:bg-danger-50 rounded-lg transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {!notif.isRead && (
+                        <div className="w-2 h-2 rounded-full bg-primary-500 mt-2 shrink-0 group-hover:hidden" />
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
 
               {/* Status filter tabs */}
