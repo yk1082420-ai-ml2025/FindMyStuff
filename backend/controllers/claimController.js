@@ -68,20 +68,24 @@ exports.createClaim = async (req, res) => {
 
         // Create notification for the post owner
         const claimant = await User.findById(claimantId).select('fullName');
-        const notification = await Notification.create({
-            recipient: item.postedBy,
-            type: 'claim',
-            title: 'New Claim on Your Post',
-            message: `${claimant?.fullName || 'Someone'} submitted a claim on "${item.title}"`,
-            relatedId: claim._id,
-            itemType,
-            itemId: itemId
-        });
+        const itemOwner = await User.findById(item.postedBy).select('notificationsEnabled');
+        
+        if (!itemOwner || itemOwner.notificationsEnabled !== false) {
+            const notification = await Notification.create({
+                recipient: item.postedBy,
+                type: 'claim',
+                title: 'New Claim on Your Post',
+                message: `${claimant?.fullName || 'Someone'} submitted a claim on "${item.title}"`,
+                relatedId: claim._id,
+                itemType,
+                itemId: itemId
+            });
 
-        // Push real-time notification via Socket.IO
-        const io = req.app.get('io');
-        if (io) {
-            io.to(item.postedBy.toString()).emit('new_notification', notification);
+            // Push real-time notification via Socket.IO
+            const io = req.app.get('io');
+            if (io) {
+                io.to(item.postedBy.toString()).emit('new_notification', notification);
+            }
         }
 
         res.status(201).json({ success: true, data: claim });
@@ -254,17 +258,21 @@ exports.approveClaim = async (req, res) => {
 
         // Notify the claimant that their claim was approved
         const ownerName = req.user.fullName || 'The post owner';
-        const notification = await Notification.create({
-            recipient: claim.claimantId,
-            type: 'message',
-            title: 'Claim Approved',
-            message: `${ownerName} approved your claim on "${item.title}". A chat has been started.`,
-            relatedId: chat._id
-        });
+        const claimantUser = await User.findById(claim.claimantId).select('notificationsEnabled');
+        
+        if (!claimantUser || claimantUser.notificationsEnabled !== false) {
+            const notification = await Notification.create({
+                recipient: claim.claimantId,
+                type: 'message',
+                title: 'Claim Approved',
+                message: `${ownerName} approved your claim on "${item.title}". A chat has been started.`,
+                relatedId: chat._id
+            });
 
-        const io = req.app.get('io');
-        if (io) {
-            io.to(claim.claimantId.toString()).emit('new_notification', notification);
+            const io = req.app.get('io');
+            if (io) {
+                io.to(claim.claimantId.toString()).emit('new_notification', notification);
+            }
         }
 
         res.status(200).json({

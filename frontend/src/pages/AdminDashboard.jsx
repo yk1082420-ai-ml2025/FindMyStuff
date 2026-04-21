@@ -34,13 +34,14 @@ import {
   Check,
   Eye,
   FileText,
-  MessageCircle
+  MessageCircle,
+  BellOff
 } from "lucide-react";
 import { useNotifications } from "../context/NotificationContext";
 import { formatTimeAgo } from "../utils/dateUtils";
 
 const AdminDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [users, setUsers] = useState([]);
@@ -510,6 +511,19 @@ const AdminDashboard = () => {
       // but let's keep it consistent if they do.
     }
     setActiveTab('notifications');
+  };
+
+  const toggleNotifications = async () => {
+    try {
+      const newStatus = user?.notificationsEnabled !== false ? false : true;
+      const { data } = await API.put("/users/profile", { notificationsEnabled: newStatus });
+      if (updateUser) updateUser(data);
+      setMessage({ text: `Notifications ${newStatus ? 'enabled' : 'disabled'} successfully!`, type: "success" });
+      setTimeout(() => setMessage({ text: "", type: "" }), 3000);
+    } catch (error) {
+      setMessage({ text: "Failed to update notification settings", type: "error" });
+      setTimeout(() => setMessage({ text: "", type: "" }), 3000);
+    }
   };
 
   const sidebarItems = [
@@ -1038,6 +1052,23 @@ const AdminDashboard = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3 px-3 py-2 border border-gray-200/60 rounded-xl bg-white shadow-sm hidden sm:flex">
+                    {user?.notificationsEnabled !== false ? 
+                        <Bell className="w-4 h-4 text-primary-500" /> : 
+                        <BellOff className="w-4 h-4 text-gray-400" />
+                    }
+                    <span className="text-sm font-medium text-gray-700 block min-w-[60px]">
+                        {user?.notificationsEnabled !== false ? 'Enabled' : 'Paused'}
+                    </span>
+                    <button
+                        onClick={toggleNotifications}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${user?.notificationsEnabled !== false ? 'bg-primary-600' : 'bg-gray-300'}`}
+                    >
+                        <span 
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${user?.notificationsEnabled !== false ? 'translate-x-4' : 'translate-x-0'}`} 
+                        />
+                    </button>
+                  </div>
                   {notifUnreadCount > 0 && (
                     <button
                       onClick={markAllAsRead}
