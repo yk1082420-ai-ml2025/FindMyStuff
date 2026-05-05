@@ -5,39 +5,53 @@ const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
 const connectDB = require('./config/db');
-const reportRoutes = require('./routes/reportRoutes');
-const chatbotRoutes = require('./routes/ChattRoutes');
-const gamificationRoutes = require('./routes/gamificationRoutes');
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+
+// ✅ FIXED CORS (IMPORTANT)
+const allowedOrigins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://yk1082420-ai-ml2025.github.io"
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
+    credentials: true
+}));
+
+// ✅ Socket.IO setup
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:3000",
+        origin: allowedOrigins,
         methods: ["GET", "POST", "PUT", "DELETE"],
         credentials: true
     }
 });
 
-// Socket.IO connection handling
+// Socket events
 io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
 
     socket.on('setup', (userId) => {
         socket.join(userId);
-        console.log('User joined room:', userId);
     });
 
     socket.on('join_chat', (chatId) => {
         socket.join(chatId);
-        console.log('Joined chat room:', chatId);
     });
 
     socket.on('leave_chat', (chatId) => {
         socket.leave(chatId);
-        console.log('Left chat room:', chatId);
     });
 
     socket.on('disconnect', () => {
@@ -46,7 +60,6 @@ io.on('connection', (socket) => {
 });
 
 // Middleware
-app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -63,8 +76,8 @@ app.use('/api/contact', require('./routes/contactRoutes'));
 app.use('/api/lost', require('./routes/lostItemRoutes'));
 app.use('/api/found', require('./routes/foundItemRoutes'));
 app.use('/api/notices', require('./routes/noticeRoutes'));
-app.use('/api/reports', reportRoutes);
-app.use('/api/chat', chatbotRoutes);
+app.use('/api/reports', require('./routes/reportRoutes'));
+app.use('/api/chat', require('./routes/ChattRoutes'));
 app.use('/api/gamification', require('./routes/gamificationRoutes'));
 app.use('/api/leaderboard', require('./routes/leaderboardRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
@@ -72,10 +85,10 @@ app.use('/api/matches', require('./routes/matchRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+    res.json({ status: 'OK' });
 });
 
-// Error handling middleware
+// Error handler
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({
@@ -88,14 +101,16 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
     try {
         await connectDB();
-        
+
+        // optional job
         require('./jobs/monthlyReset');
-        
+
         const PORT = process.env.PORT || 5000;
+
         server.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
-            console.log(`Socket.IO ready for connections`);
         });
+
     } catch (error) {
         console.error('Failed to start server:', error);
     }
