@@ -11,6 +11,8 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+console.log("ENV:", process.env.MONGO_DB_URI);
+
 // ✅ FIXED CORS (IMPORTANT)
 const allowedOrigins = [
     "http://localhost:3000",
@@ -82,6 +84,14 @@ app.use('/api/gamification', require('./routes/gamificationRoutes'));
 app.use('/api/leaderboard', require('./routes/leaderboardRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/matches', require('./routes/matchRoutes'));
+app.use('/api/phone-verify', require('./routes/phoneVerificationRoutes'));
+app.use('/api/points',       require('./routes/pointsRoutes'));
+app.use('/api/returns',      require('./routes/returnRoutes'));
+
+// ✅ ADDED — 3 missing routes that were never registered
+app.use('/api/phone-verify', require('./routes/phoneVerificationRoutes'));
+app.use('/api/points',       require('./routes/pointsRoutes'));
+app.use('/api/returns',      require('./routes/returnRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
